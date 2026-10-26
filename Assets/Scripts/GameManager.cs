@@ -1,16 +1,69 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class GameManager : MonoBehaviour
 {
-    //TODO: a small menu system
+    private AsyncOperationHandle<GameObject> tilePrefabHandle;
+    private AsyncOperationHandle<IList<Tile>> tileVariationsHandle;
+    private GameObject tilePrefab;
+    private List<Tile> tileVariations;
+    private bool isSetUp = false;
+
+    private void Awake()
+    {
+        RetrieveAddressableDependencies();
+    }
+
+    private async void RetrieveAddressableDependencies()
+    {
+        tilePrefabHandle = Addressables.LoadAssetAsync<GameObject>(Constants.AddressablePrefabs.Tile);
+        tileVariationsHandle = Addressables.LoadAssetsAsync<Tile>(Constants.AddressableLabels.Tile);
+        tilePrefab = await tilePrefabHandle.Task;
+        tileVariations = (await tileVariationsHandle.Task).ToList();
+        isSetUp = true;
+    }
+
+    private void OnDestroy()
+    {
+        if(tilePrefabHandle.IsValid()) Addressables.Release(tilePrefabHandle);
+        if(tileVariationsHandle.IsValid()) Addressables.Release(tileVariationsHandle);
+    }
+
+    //TODO: a small menu system (unity input system)
     //       - Title Screen (with title) -> PLAY, SETTINGS, EXIT
     //       - Grid Size Picker (after PLAY button) -> a grid with the max size where the player has to drag with his fingers to draw the size they want
     //           - holding and dragging begins activating grid tiles, letting go (unless it's too small of a selection) starts the game
     //       - Pause Menu -> CONTINUE, MAIN MENU
 
-    //TODO: generate the tile grid with pairs
+    public void GenerateMemoryGrid(int size)
+    {
+        if(!isSetUp)
+        {
+            Debug.LogError("Grid generation was called, but the GameManager was not set up yet. Aborting.");
+        }
 
-    //TODO: selection logic
+        int pairCount = size / 2;
+        int totalTiles = size * size;
+
+        if(size <= 0 || totalTiles % 2 != 0)
+        {
+            Debug.LogError("With the received size of: " + size + ", we cannot create a grid with an even number of nodes.");
+            return;
+        }
+
+        if(pairCount > tileVariations.Count)
+        {
+            Debug.LogError("Cannot create the requested " + pairCount + " because there are only " + tileVariations.Count + " tile variations");
+            return;
+        }
+
+        //TODO: generate the tile grid with pairs
+    }
+
+    //TODO: selection logic (unity input system)
     //       - clicing on a tile flips it in place to show the logo underneath
     //       - if two become selected
     //           - CORRECT   -> an animation plays, the tiles spin wildly and come close to the camera. by the time they get close, on their backside, there is
