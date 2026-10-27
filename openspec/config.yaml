@@ -1,0 +1,27 @@
+schema: spec-driven
+
+context: |
+  This is a Unity project. Follow AGENTS.md as the source of truth for project
+  constraints. Do not edit Unity serialization files (*.asset, *.prefab,
+  *.unity) or generated IDE files (*.csproj, *.sln, *.slnx) directly.
+  Preserve existing asset-loading, singleton, and save-data patterns.
+
+rules:
+  proposal:
+    - Identify the Unity systems or scenes affected and state explicit non-goals.
+    - Keep the proposal focused on one independently reviewable change.
+  design:
+    - Describe runtime, persistence, and asset-loading impacts when applicable.
+    - State how Unity serialization-file edits will be avoided.
+  tasks:
+    - Include source implementation and appropriate Unity Editor or automated validation tasks.
+    - Do not include direct edits to Unity serialization or generated IDE files.
+
+operations:
+  apply:
+    guidance:
+      - Implement only an explicitly authorized, planning-complete change.
+      - Validate through the project's available automated checks or Unity Editor workflows.
+  archive:
+    guidance:
+      - Archive only after task completion and verification are reported.
