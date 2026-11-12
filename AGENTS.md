@@ -2,8 +2,9 @@
 
 ## Unity safety
 
-- Do not edit Unity serialization or generated project files directly: `*.asset`, `*.prefab`, `*.unity`, `*.csproj`, `*.sln`, or `*.slnx`.
-- Make gameplay and tooling changes through source files and Unity-supported editor workflows only.
+- Unity serialization files (`*.asset`, `*.meta`, `*.prefab`, `*.unity`, `*.mat`, `*.inputactions`, etc.) may be edited directly when a task calls for it, or through the Unity MCP server when it is connected. Keep the YAML well-formed, preserve existing GUIDs and fileIDs so references don't break, and give new assets and objects fresh unique IDs.
+- Do not edit generated project files: `*.csproj`, `*.sln`, or `*.slnx`.
+- Do not commit any changes until the user has reviewed them and explicitly agreed to the commit.
 - Preserve the project's existing asset-loading, singleton, and save-data patterns. Inspect the relevant code before extending them.
 
 ## OpenSpec workflow

@@ -17,4 +17,14 @@ public class Constants
     {
         public const string Tile = "tile";
     }
+
+    public static class GameObjectNames
+    {
+        public const string BoardRoot = "Board Root";
+        public const string TileBody = "Body";
+        public const string TileBackFace = "BackFaceLogo";
+        public const string TileFrontFace = "FrontFace";
+        public const string TileFrontFaceLogo = "FrontFaceLogo";
+        public const string TileDescriptionText = "DescriptionText";
+    }
 }

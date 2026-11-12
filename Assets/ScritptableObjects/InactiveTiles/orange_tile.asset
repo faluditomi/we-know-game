@@ -10,8 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 36c9567f9e2779c40922efc550b2922a, type: 3}
-  m_Name: we_knox_tile
+  m_Name: orange_tile
   m_EditorClassIdentifier: Assembly-CSharp::Tile
-  tileName: We.Knox
-  foundDescription: that one thing i have no clue about whatsoever
-  backLogo: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
+  tileName: Orange
+  foundDescription: this an orange
+  backLogo: {fileID: 21300000, guid: 42ca45e10920062488d8348049a4a70f, type: 3}
+  tileColour: {r: 1, g: 0.69972223, b: 0.37601066, a: 1}
