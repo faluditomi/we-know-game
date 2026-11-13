@@ -69,6 +69,12 @@ public class GameManager : MonoBehaviour
     /// <summary>Raised exactly once per board, after the final pair returns.</summary>
     public event Action BoardCompleted;
 
+    /// <summary>Raised once when the tile prefab and tile data finished loading successfully.</summary>
+    public event Action SetupSucceeded;
+
+    /// <summary>Raised once when setup failed; the game cannot start boards.</summary>
+    public event Action SetupFailed;
+
     private readonly MatchFlow<TileController> flow = new MatchFlow<TileController>();
     private readonly List<TileController> boardTiles = new List<TileController>();
     private readonly List<RaycastResult> uiRaycastResults = new List<RaycastResult>();
@@ -80,8 +86,13 @@ public class GameManager : MonoBehaviour
     private bool isSetUp;
     private bool setupFinished;
     private bool isDestroyed;
+    private bool setupFailed;
     private float boardLocalZ = 0f;
-    private int boardSize;
+    private int boardColumns;
+    private int boardRows;
+    private bool isPaused;
+    private bool boardInputArmed;
+    private GameSettings settings;
 
     private InputAction positionAction;
     private InputAction pressAction;
@@ -102,6 +113,35 @@ public class GameManager : MonoBehaviour
     public MatchFlowState State => flow.State;
     public int ConfirmedPairs => flow.ConfirmedPairs;
     public int PairCount => flow.PairCount;
+
+    /// <summary>True once the tile prefab and tile data are loaded and boards can be started.</summary>
+    public bool IsReady => isSetUp;
+
+    /// <summary>True when setup failed and no board can be started.</summary>
+    public bool HasSetupFailed => setupFailed;
+
+    /// <summary>True while a board is generated and in play (including while paused).</summary>
+    public bool HasActiveBoard => boardTiles.Count > 0;
+
+    public bool IsPaused => isPaused;
+
+    /// <summary>Number of distinct tile designs available for pairs.</summary>
+    public int DesignCount => tileVariations != null ? tileVariations.Count : 0;
+
+    /// <summary>Side length of the largest square board the loaded tile designs can fill.</summary>
+    public int MaxBoardSize => BoardSelection.MaxSquareSize(DesignCount);
+
+    /// <summary>The loaded tile prefab, for menu visuals that reuse real tiles. Null until ready.</summary>
+    public GameObject TilePrefab => tilePrefab;
+
+    /// <summary>The loaded tile designs. Empty until ready.</summary>
+    public IReadOnlyList<Tile> TileVariations => tileVariations != null ? (IReadOnlyList<Tile>)tileVariations : Array.Empty<Tile>();
+
+    /// <summary>Fresh-install default for the vibration setting.</summary>
+    public bool BlockedInputHapticsDefault => blockedInputHaptics;
+
+    /// <summary>Uses the player's settings (vibration) instead of the serialized defaults.</summary>
+    public void UseSettings(GameSettings gameSettings) => settings = gameSettings;
 
     // ---- Lifecycle -------------------------------------------------------------------------
 
@@ -170,6 +210,14 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
+        if(isPaused) return;
+
+        // A new board only accepts taps once the gesture that started it (and any other contact) has lifted.
+        if(!boardInputArmed && boardTiles.Count > 0 && !AnyPointerHeld())
+        {
+            boardInputArmed = true;
+        }
+
         if(flow.State == MatchFlowState.AwaitingContinue && !continueArmed && !AnyPointerHeld())
         {
             continueArmed = true;
@@ -264,9 +312,7 @@ public class GameManager : MonoBehaviour
         tilePrefab = prefab;
         tileVariations = variations;
         isSetUp = true;
-
-        //TODO: REMOVE THIS
-        GenerateMemoryGrid(Random.Range(1, 3) * 2);
+        SetupSucceeded?.Invoke();
     }
 
     private void FailSetup(string reason)
@@ -274,17 +320,76 @@ public class GameManager : MonoBehaviour
         isSetUp = false;
         flow.Fail();
         Debug.LogError($"GameManager setup failed: {reason} The board will stay non-interactive.", this);
+
+        if(!setupFailed)
+        {
+            setupFailed = true;
+            SetupFailed?.Invoke();
+        }
     }
 
-    //TODO: a small menu system (unity input system)
-    //       - Title Screen (with title) -> PLAY, SETTINGS, EXIT
-    //       - Grid Size Picker (after PLAY button) -> a grid with the max size where the player has to drag with his fingers to draw the size they want
-    //           - holding and dragging begins activating grid tiles, letting go (unless it's too small of a selection) starts the game
-    //       - Pause Menu -> CONTINUE, MAIN MENU
+    // ---- Game lifecycle (driven by the menu) -----------------------------------------------
+
+    /// <summary>
+    /// Starts a new game on a <paramref name="columns"/> × <paramref name="rows"/> board.
+    /// Board taps are accepted only after every pointer from the starting gesture has lifted.
+    /// </summary>
+    public bool StartGame(int columns, int rows)
+    {
+        if(!isSetUp) return false;
+
+        BoardSelectionResult result = BoardSelection.Validate(columns, rows, DesignCount);
+        if(result != BoardSelectionResult.Valid)
+        {
+            Debug.LogWarning($"Cannot start a {columns}×{rows} board: {BoardSelection.Describe(result)}.", this);
+            return false;
+        }
+
+        isPaused = false;
+        GenerateMemoryGrid(columns, rows);
+        boardInputArmed = false;
+        gesture = default;
+        return boardTiles.Count > 0;
+    }
+
+    /// <summary>
+    /// Pauses or resumes the current game. While paused, board input is ignored and every running
+    /// match animation is frozen so it resumes exactly where it stopped.
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        if(isPaused == paused) return;
+        isPaused = paused;
+        gesture = default;
+
+        if(paused)
+        {
+            if(presentationView != null) presentationView.SetPromptVisible(false);
+            return;
+        }
+
+        // The tap that pressed CONTINUE must not also select a tile or dismiss a presentation.
+        boardInputArmed = false;
+        continueArmed = false;
+        if(presentationView != null && flow.State == MatchFlowState.AwaitingContinue) presentationView.SetPromptVisible(true);
+    }
+
+    /// <summary>
+    /// Leaves the current board without confirming any pending match or raising completion.
+    /// Also used to clear a completed board before returning to the menu.
+    /// </summary>
+    public void AbandonGame()
+    {
+        CancelActiveSequence(confirmPendingMatch: false, raiseCompletion: false);
+        ClearBoard();
+        isPaused = false;
+        boardInputArmed = false;
+        if(isSetUp) flow.ResetToLoading();
+    }
 
     // ---- Board generation ------------------------------------------------------------------
 
-    public void GenerateMemoryGrid(int size)
+    public void GenerateMemoryGrid(int columns, int rows)
     {
         if(!isSetUp)
         {
@@ -292,21 +397,14 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        int totalTiles = size * size;
-
-        if(size <= 0 || totalTiles % 2 != 0)
+        BoardSelectionResult validation = BoardSelection.Validate(columns, rows, tileVariations.Count);
+        if(validation != BoardSelectionResult.Valid)
         {
-            Debug.LogError($"With the received size of {size}, we cannot create a grid with an even number of nodes.");
+            Debug.LogError($"Cannot create a {columns}×{rows} board: {BoardSelection.Describe(validation)}.");
             return;
         }
 
-        int pairCount = totalTiles / 2;
-
-        if(pairCount > tileVariations.Count)
-        {
-            Debug.LogError($"Cannot create the requested {pairCount} because there are only {tileVariations.Count} tile variations");
-            return;
-        }
+        int pairCount = columns * rows / 2;
 
         List<Tile> tilePool = tileVariations.ToList();
         List<Tile> selectedTiles = new List<Tile>();
@@ -330,14 +428,15 @@ public class GameManager : MonoBehaviour
 
         float stepX = tileWidth + tileSpacing;
         float stepY = tileHeight + tileSpacing;
-        float centreOffset = (size - 1) * 0.5f;
+        float columnCentre = (columns - 1) * 0.5f;
+        float rowCentre = (rows - 1) * 0.5f;
 
-        for(int row = 0; row < size; row++)
+        for(int row = 0; row < rows; row++)
         {
-            for(int column = 0; column < size; column++)
+            for(int column = 0; column < columns; column++)
             {
-                float x = (column - centreOffset) * stepX;
-                float y = (row - centreOffset) * stepY;
+                float x = (column - columnCentre) * stepX;
+                float y = (row - rowCentre) * stepY;
                 GameObject tileObject = Instantiate(tilePrefab, boardRoot, false);
                 tileObject.transform.localPosition = new Vector3(x, y, boardLocalZ);
                 TileView tileView = tileObject.GetComponent<TileView>();
@@ -358,7 +457,8 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        boardSize = size;
+        boardColumns = columns;
+        boardRows = rows;
         FrameBoard();
         flow.StartBoard(pairCount);
     }
@@ -366,7 +466,8 @@ public class GameManager : MonoBehaviour
     private void ClearBoard()
     {
         boardTiles.Clear();
-        boardSize = 0;
+        boardColumns = 0;
+        boardRows = 0;
         if(boardRoot == null) return;
 
         List<GameObject> oldTiles = new List<GameObject>();
@@ -386,14 +487,14 @@ public class GameManager : MonoBehaviour
         framingDirty = false;
         framedScreenSize = new Vector2Int(Screen.width, Screen.height);
         framedSafeArea = Screen.safeArea;
-        if(gameplayCamera == null || boardRoot == null || boardSize <= 0) return;
+        if(gameplayCamera == null || boardRoot == null || boardColumns <= 0 || boardRows <= 0) return;
 
         Vector3 lossy = boardRoot.lossyScale;
         float stepX = tileWidth + tileSpacing;
         float stepY = tileHeight + tileSpacing;
         Vector2 boardExtent = new Vector2(
-            (boardSize * stepX - tileSpacing + boardFramingPadding * 2f) * Mathf.Abs(lossy.x),
-            (boardSize * stepY - tileSpacing + boardFramingPadding * 2f) * Mathf.Abs(lossy.y));
+            (boardColumns * stepX - tileSpacing + boardFramingPadding * 2f) * Mathf.Abs(lossy.x),
+            (boardRows * stepY - tileSpacing + boardFramingPadding * 2f) * Mathf.Abs(lossy.y));
 
         Rect safe = Screen.safeArea;
         Rect normalisedSafe = Screen.width > 0 && Screen.height > 0
@@ -460,6 +561,9 @@ public class GameManager : MonoBehaviour
         InputDevice device = context.control != null ? context.control.device : null;
         if(device == null) return;
 
+        // No board (menus) or paused: the board ignores input entirely.
+        if(isPaused || boardTiles.Count == 0) return;
+
         // One gameplay pointer at a time: other contacts are ignored until it is released.
         if(gesture.Active) return;
 
@@ -472,6 +576,9 @@ public class GameManager : MonoBehaviour
             gesture = new PointerGesture { Active = true, DeviceId = device.deviceId, StartPosition = position, ForContinue = true };
             return;
         }
+
+        // The gesture that started or resumed the game must lift before the board takes taps.
+        if(!boardInputArmed) return;
 
         if(!flow.AcceptsSelection)
         {
@@ -493,7 +600,7 @@ public class GameManager : MonoBehaviour
     private void OnPrimaryReleased(InputAction.CallbackContext context)
     {
         InputDevice device = context.control != null ? context.control.device : null;
-        if(!gesture.Active || device == null || device.deviceId != gesture.DeviceId) return;
+        if(isPaused || !gesture.Active || device == null || device.deviceId != gesture.DeviceId) return;
 
         PointerGesture completed = gesture;
         gesture = default;
@@ -571,7 +678,8 @@ public class GameManager : MonoBehaviour
 
     private void TriggerBlockedFeedback()
     {
-        if(!blockedInputHaptics || Time.unscaledTime < nextBlockedFeedbackTime) return;
+        bool vibrationEnabled = settings != null ? settings.Vibration : blockedInputHaptics;
+        if(!vibrationEnabled || Time.unscaledTime < nextBlockedFeedbackTime) return;
         nextBlockedFeedbackTime = Time.unscaledTime + blockedFeedbackCooldown;
 #if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
         Handheld.Vibrate();
@@ -779,10 +887,6 @@ public class GameManager : MonoBehaviour
         BoardCompleted?.Invoke();
     }
 
-    //TODO: if all pairs are found and confirmed, the game is over and we return to the main menu
-    //       - until this point, the title could be "We Know... Do You?", but once the player succeeds and return to the main menu, momentarily, the title says
-    //         "We Know... And Now You Do Too!", before it turns back after a while.
-
     //TODO: after a certain amount of seconds, if a game is ongoing and there was no input, it automatically resets to the main menu
 
     //TODO: leaderboard system if we have time and willpower
@@ -832,25 +936,27 @@ public class GameManager : MonoBehaviour
 
     // ---- Animation helpers -----------------------------------------------------------------
 
-    private static IEnumerator Animate(float duration, AnimationCurve curve, Action<float> apply)
+    // Both helpers only advance while the game is not paused, so a paused sequence resumes exactly where it stopped.
+
+    private IEnumerator Animate(float duration, AnimationCurve curve, Action<float> apply)
     {
         float elapsed = 0f;
         while(elapsed < duration)
         {
             apply(TileAnimationSettings.Evaluate(curve, elapsed / duration));
             yield return null;
-            elapsed += Time.unscaledDeltaTime;
+            if(!isPaused) elapsed += Time.unscaledDeltaTime;
         }
         apply(TileAnimationSettings.Evaluate(curve, 1f));
     }
 
-    private static IEnumerator Wait(float seconds)
+    private IEnumerator Wait(float seconds)
     {
         float elapsed = 0f;
         while(elapsed < seconds)
         {
             yield return null;
-            elapsed += Time.unscaledDeltaTime;
+            if(!isPaused) elapsed += Time.unscaledDeltaTime;
         }
     }
 }
