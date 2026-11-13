@@ -779,6 +779,9 @@ public class GameManager : MonoBehaviour
 
         float depth = PresentationDepth(out float scaleMultiplier);
         float presentedHalfWidth = TileWorldWidth * scaleMultiplier * 0.5f;
+        // How close the pair ends up: each tile drops its inner bezel as it joins, so the
+        // centres finish nearer than a full tile width and the cut frame runs line up.
+        float seamJoinWidth = left.SeamJoinWidth;
 
         if(presentationView != null)
         {
@@ -793,14 +796,18 @@ public class GameManager : MonoBehaviour
 
         yield return Animate(s.presentDuration, s.presentCurve, t =>
         {
-            left.SetPresentationProgress(t, PresentationTarget(true, depth, presentedHalfWidth, 0f), scaleMultiplier, s.presentSpins);
-            right.SetPresentationProgress(t, PresentationTarget(false, depth, presentedHalfWidth, 0f), scaleMultiplier, s.presentSpins);
+            left.SetPresentationProgress(t, PresentationTarget(true, depth, presentedHalfWidth, seamJoinWidth, 0f), scaleMultiplier, s.presentSpins);
+            right.SetPresentationProgress(t, PresentationTarget(false, depth, presentedHalfWidth, seamJoinWidth, 0f), scaleMultiplier, s.presentSpins);
         });
 
         yield return Animate(s.joinDuration, s.joinCurve, t =>
         {
-            left.SetPresentationPosition(PresentationTarget(true, depth, presentedHalfWidth, t));
-            right.SetPresentationPosition(PresentationTarget(false, depth, presentedHalfWidth, t));
+            left.SetPresentationPosition(PresentationTarget(true, depth, presentedHalfWidth, seamJoinWidth, t));
+            right.SetPresentationPosition(PresentationTarget(false, depth, presentedHalfWidth, seamJoinWidth, t));
+            // The inner bezels retract at exactly the rate the gap closes, so the pair
+            // meets flush without the two frames ever overlapping.
+            left.SetSeamRetract(t);
+            right.SetSeamRetract(t);
         });
 
         sequenceRoutine = null;
@@ -830,6 +837,9 @@ public class GameManager : MonoBehaviour
         {
             first.SetReturnProgress(t);
             second.SetReturnProgress(t);
+            // Reversed on the way back: the bezels grow again as the tiles separate.
+            first.SetSeamRetract(1f - t);
+            second.SetSeamRetract(1f - t);
         });
 
         first.MarkMatched();
@@ -869,15 +879,16 @@ public class GameManager : MonoBehaviour
 
     /// <summary>
     /// World centre for a presented tile. At <paramref name="join"/> = 0 the tiles are a tile width apart;
-    /// at 1 their inner edges meet at the screen centre so the two description halves form one text.
+    /// at 1 they sit <paramref name="seamJoinWidth"/> tile-widths apart, which is where their seam-clipped
+    /// frame runs meet and the two description halves form one text across a single wide panel.
     /// </summary>
-    private Vector3 PresentationTarget(bool left, float depth, float presentedHalfWidth, float join)
+    private Vector3 PresentationTarget(bool left, float depth, float presentedHalfWidth, float seamJoinWidth, float join)
     {
         Vector3 cameraRight = gameplayCamera.transform.right;
         Vector3 outward = left ? -cameraRight : cameraRight;
         Vector3 centre = gameplayCamera.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, depth));
-        Vector3 innerEdge = centre + outward * presentedHalfWidth * (1f - join);
-        return innerEdge + outward * presentedHalfWidth;
+        float offset = presentedHalfWidth * Mathf.Lerp(2f, seamJoinWidth, join);
+        return centre + outward * offset;
     }
 
     private void RaiseBoardCompleted()

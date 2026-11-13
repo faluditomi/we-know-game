@@ -13,6 +13,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
     private static readonly int BaseMapStId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int ClipRectId = Shader.PropertyToID("_ClipRect");
+    private static readonly int HueId = Shader.PropertyToID("_Hue");
     private const string ClipRectKeyword = "UNITY_UI_CLIP_RECT";
     private const float RevealedAngle = 180f;
     private const float SeamOverlapFraction = 0.02f;
@@ -29,6 +30,34 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     [SerializeField] private Renderer[] faceDownRenderers = new Renderer[0];
     [Tooltip("3D TextMeshPro on the face-down side. Its rect must be twice the face width: each tile of a found pair shows one clipped half, so the joined pair reads as the full description.")]
     [SerializeField] private TMP_Text descriptionText;
+    [Tooltip("Hologram panel behind the revealed logo. Takes a faint hue from the tile's own colour, so each design stays recognisable without the frame giving the pair away.")]
+    [SerializeField] private Renderer screenRenderer;
+    [Range(0f, 1f)]
+    [Tooltip("How much of the tile's colour reaches the hologram panel. Low values keep dark logo artwork readable.")]
+    [SerializeField] private float screenHueStrength = 0.3f;
+
+    [Header("Pair seam")]
+    [Tooltip("Bezel parts swapped for seam-clipped meshes while a matched pair is joined, so the two tiles read as one wide panel. Leave empty on decorative tiles.")]
+    [SerializeField] private SeamClipPart[] seamClipParts = new SeamClipPart[0];
+    [Tooltip("Pivot holding the bezel that sits on this tile's left edge, with its origin on the cut plane. Scaled to nothing along X while that edge is the seam, so the bezel retracts instead of popping.")]
+    [SerializeField] private Transform seamCapLeft;
+    [Tooltip("Same for the right edge.")]
+    [SerializeField] private Transform seamCapRight;
+    [Tooltip("Half-width of the clipped tile, in tile units. The pair joins at twice this, so the cut bezel runs meet exactly. Must match the clip plane the seam meshes were generated with.")]
+    [SerializeField] private float seamHalfWidth = 0.41f;
+
+    /// <summary>One bezel part and the two meshes that replace it at the seam.</summary>
+    [System.Serializable]
+    public sealed class SeamClipPart
+    {
+        public MeshFilter target;
+        [Tooltip("The unclipped mesh, restored when the tile is back on the board.")]
+        public Mesh full;
+        [Tooltip("Used when this tile is the left half of a joined pair: its right-hand bezel is gone.")]
+        public Mesh keepLeft;
+        [Tooltip("Used when this tile is the right half of a joined pair: its left-hand bezel is gone.")]
+        public Mesh keepRight;
+    }
 
     private Tile tile;
     private bool referencesResolved;
@@ -46,6 +75,9 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private Color logoBaseColor = Color.white;
     private MaterialPropertyBlock bodyBlock;
     private MaterialPropertyBlock logoBlock;
+    private MaterialPropertyBlock screenBlock;
+    private bool seamClipped;
+    private bool seamLeftHalf = true;
     private Vector3 logoBaseLocalScale = Vector3.one;
     private Vector3 descriptionBaseLocalPosition;
     private Material descriptionMaterial;
@@ -81,13 +113,17 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         IsRevealed = false;
         IsAnimating = false;
 
-        bodyBaseColor = tileData.tileColour;
+        // The frame keeps its own teal: colouring it per design would show which
+        // face-down tiles pair up. The tile's colour goes to the hologram panel instead.
+        bodyBaseColor = ReadBaseColor(bodyRenderer, Color.white);
         logoBaseColor = ReadBaseColor(logoRenderer, Color.white);
 
         if(logoRenderer != null && tileData.backLogo != null)
         {
             ApplyLogo(tileData.backLogo);
         }
+
+        ApplyScreenHue(tileData.tileColour);
 
         if(descriptionText != null) descriptionText.text = tileData.foundDescription;
 
@@ -113,6 +149,16 @@ public sealed class TileController : MonoBehaviour, IMatchTile
 
         logoRenderer.transform.localScale = new Vector3(
             logoBaseLocalScale.x * size.x, logoBaseLocalScale.y * size.y, logoBaseLocalScale.z);
+    }
+
+    /// <summary>Tints the hologram panel with a washed-out version of the tile's colour.</summary>
+    private void ApplyScreenHue(Color tileColour)
+    {
+        if(screenRenderer == null) return;
+        Color hue = Color.Lerp(Color.white, tileColour, Mathf.Clamp01(screenHueStrength));
+        hue.a = 1f;
+        screenBlock.SetColor(HueId, hue);
+        screenRenderer.SetPropertyBlock(screenBlock);
     }
 
     /// <summary>Stores the generated board pose. Call after placement and sizing.</summary>
@@ -192,15 +238,71 @@ public sealed class TileController : MonoBehaviour, IMatchTile
             foreach(Renderer faceDown in faceDownRenderers) if(faceDown != null) faceDown.enabled = !visible;
         }
 
+        SetSeamClip(visible, leftHalf);
+
         if(descriptionText == null) return;
         if(visible) ConfigureDescriptionHalf(leftHalf);
         descriptionText.gameObject.SetActive(visible);
         if(visible) descriptionText.ForceMeshUpdate();
     }
 
+    /// <summary>
+    /// Swaps the bezel meshes for their seam-clipped variants, removing the bezel on the
+    /// side where this tile meets its partner. With both tiles clipped and joined at
+    /// <see cref="SeamJoinWidth"/>, their remaining frame runs are collinear and touch,
+    /// so the pair reads as one wide panel instead of two tiles side by side.
+    /// </summary>
+    private void SetSeamClip(bool clipped, bool leftHalf)
+    {
+        if(seamClipParts == null || seamClipParts.Length == 0) return;
+        if(seamClipped == clipped && !clipped) return;
+        seamClipped = clipped;
+
+        foreach(SeamClipPart part in seamClipParts)
+        {
+            if(part == null || part.target == null) continue;
+            Mesh mesh = !clipped ? part.full : (leftHalf ? part.keepLeft : part.keepRight);
+            if(mesh != null) part.target.sharedMesh = mesh;
+        }
+
+        // The clipped mesh is missing the bezel on the seam side. The matching cap puts
+        // that geometry back as a separate object, so it can be retracted on screen
+        // while the pair closes instead of vanishing the moment the match is made.
+        seamLeftHalf = leftHalf;
+        Transform inner = leftHalf ? seamCapRight : seamCapLeft;
+        Transform outer = leftHalf ? seamCapLeft : seamCapRight;
+        if(outer != null) outer.gameObject.SetActive(false);
+        if(inner != null)
+        {
+            inner.gameObject.SetActive(clipped);
+            inner.localScale = Vector3.one;
+        }
+    }
+
+    /// <summary>
+    /// Retracts the bezel on the seam side: 0 leaves it whole, 1 collapses it into the cut
+    /// plane. Driven by the join so the bezel is exactly gone as the two tiles meet, and
+    /// run backwards on the way out so it grows again as they separate.
+    /// </summary>
+    public void SetSeamRetract(float retract)
+    {
+        Transform inner = seamLeftHalf ? seamCapRight : seamCapLeft;
+        if(inner == null || !inner.gameObject.activeSelf) return;
+        inner.localScale = new Vector3(Mathf.Clamp01(1f - retract), 1f, 1f);
+    }
+
+    /// <summary>
+    /// Distance between the centres of a joined pair, in tile units. Smaller than one tile
+    /// because each tile gives up the bezel on its inner side.
+    /// </summary>
+    public float SeamJoinWidth => seamClipParts != null && seamClipParts.Length > 0 ? seamHalfWidth * 2f : 1f;
+
     private void ConfigureDescriptionHalf(bool leftHalf)
     {
         RectTransform rect = descriptionText.rectTransform;
+        // The readable strip is the joined pair minus the two bezels they gave up, so the
+        // text box always spans exactly what the player can see.
+        rect.sizeDelta = new Vector2(SeamJoinWidth * 2f, rect.sizeDelta.y);
         float width = rect.rect.width;
         float height = rect.rect.height;
         float faceWidth = width * 0.5f;
@@ -329,6 +431,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         referencesResolved = true;
         bodyBlock = new MaterialPropertyBlock();
         logoBlock = new MaterialPropertyBlock();
+        screenBlock = new MaterialPropertyBlock();
 
         bool usedFallback = false;
 
@@ -356,6 +459,10 @@ public sealed class TileController : MonoBehaviour, IMatchTile
             descriptionText = child != null ? child.GetComponent<TMP_Text>() : null;
             usedFallback |= descriptionText != null;
         }
+
+        // Caps only exist while a pair is joined; the full mesh covers that region otherwise.
+        if(seamCapLeft != null) seamCapLeft.gameObject.SetActive(false);
+        if(seamCapRight != null) seamCapRight.gameObject.SetActive(false);
 
         if(logoRenderer != null) logoBaseLocalScale = logoRenderer.transform.localScale;
         if(descriptionText != null) descriptionBaseLocalPosition = descriptionText.rectTransform.localPosition;

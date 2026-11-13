@@ -5,7 +5,8 @@ using UnityEngine;
 /// Live menu background: a tilted wall of real tiles that drifts slowly while random tiles flip
 /// to show their logo and flip back. Plays a travelling flip wave on request (success title).
 /// Built from the tile prefab and data the <see cref="GameManager"/> already loaded, on a
-/// non-raycastable layer, and shown only while a menu is visible.
+/// non-raycastable layer, and shown only while a menu is visible. The background seen through the
+/// gaps between tiles is the scene-wide <see cref="NeonBackdrop"/>, not a plane of this wall's own.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TileWallBackground : MonoBehaviour
@@ -23,6 +24,8 @@ public sealed class TileWallBackground : MonoBehaviour
 
     [Header("Placement")]
     [SerializeField] private Camera targetCamera;
+    [Tooltip("Decorative stand-in for the gameplay tile: the same look on simplified meshes with the static parts merged into one renderer. The wall spawns hundreds of tiles, so this is what keeps it affordable. Leave empty to spawn the gameplay prefab instead.")]
+    [SerializeField] private GameObject wallTilePrefab;
     [Tooltip("Minimum wall size. The wall grows beyond this to cover the whole view at the current aspect ratio.")]
     [Min(1)] [SerializeField] private int columns = 13;
     [Min(1)] [SerializeField] private int rows = 9;
@@ -39,8 +42,6 @@ public sealed class TileWallBackground : MonoBehaviour
     [SerializeField] private Vector2 viewportAnchor = new Vector2(0.58f, 0.5f);
     [Tooltip("Wall rotation relative to the camera, so it recedes in perspective.")]
     [SerializeField] private Vector3 tiltEuler = new Vector3(15f, 12f, 7f);
-    [Tooltip("Colour of the backdrop behind the wall, visible in the gaps between tiles.")]
-    [SerializeField] private Color backdropColor = new Color(0.22f, 0.22f, 0.23f, 1f);
 
     [Header("Motion")]
     [Tooltip("Drift in wall units per second along the wall's right/up axes.")]
@@ -62,11 +63,8 @@ public sealed class TileWallBackground : MonoBehaviour
     [Min(0.1f)] [SerializeField] private float wavePeriod = 1.6f;
     [Range(0.1f, 0.9f)] [SerializeField] private float waveRevealPortion = 0.5f;
 
-    private const string SidePrefix = "Side";
-
     private readonly List<WallTile> tiles = new List<WallTile>();
     private Transform wallRoot;
-    private Material backdropMaterial;
     private Vector2 drift;
     private float nextIdleFlip;
     private float celebrateStart;
@@ -92,7 +90,7 @@ public sealed class TileWallBackground : MonoBehaviour
         if(IsBuilt || tilePrefab == null || designs == null || designs.Count == 0) return;
         if(targetCamera == null) targetCamera = Camera.main;
 
-        sourcePrefab = tilePrefab;
+        sourcePrefab = wallTilePrefab != null ? wallTilePrefab : tilePrefab;
         sourceDesigns = designs;
         Spawn(RequiredArea());
     }
@@ -105,7 +103,6 @@ public sealed class TileWallBackground : MonoBehaviour
             Destroy(wallRoot.gameObject);
             tiles.Clear();
         }
-        if(backdropMaterial != null) Destroy(backdropMaterial);
 
         gridColumns = Mathf.Clamp(Mathf.CeilToInt(area.width / Step), columns, Mathf.Max(columns, maxColumns));
         gridRows = Mathf.Clamp(Mathf.CeilToInt(area.height / Step), rows, Mathf.Max(rows, maxRows));
@@ -145,38 +142,8 @@ public sealed class TileWallBackground : MonoBehaviour
             }
         }
 
-        CreateBackdrop(wallLayer);
         ScheduleIdleFlip();
         SetVisible(visible);
-    }
-
-    private void OnDestroy()
-    {
-        if(backdropMaterial != null) Destroy(backdropMaterial);
-    }
-
-    /// <summary>A dark plane just behind the tiles so the gaps read as grout instead of sky.</summary>
-    private void CreateBackdrop(int layer)
-    {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if(shader == null) return;
-
-        GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        backdrop.name = "Backdrop";
-        backdrop.layer = layer;
-        Destroy(backdrop.GetComponent<Collider>());
-        backdrop.transform.SetParent(wallRoot, false);
-        // Tiles face the camera along the wall's -Z; the backdrop sits behind them.
-        backdrop.transform.localPosition = new Vector3(gridCentre.x, gridCentre.y, 0.2f);
-        // Oversized so its edge never shows, even on wide phones where the tilted wall's corner is in view.
-        backdrop.transform.localScale = new Vector3(gridColumns * Step * 3f, gridRows * Step * 3f, 1f);
-
-        backdropMaterial = new Material(shader);
-        if(backdropMaterial.HasProperty("_BaseColor")) backdropMaterial.SetColor("_BaseColor", backdropColor);
-        Renderer renderer = backdrop.GetComponent<Renderer>();
-        renderer.sharedMaterial = backdropMaterial;
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
     }
 
     /// <summary>Shows or hides the wall. Hidden walls do not animate.</summary>
@@ -362,10 +329,6 @@ public sealed class TileWallBackground : MonoBehaviour
     private static void PrepareDecorativeTile(GameObject tileObject, int layer)
     {
         foreach(Collider collider in tileObject.GetComponentsInChildren<Collider>(true)) Destroy(collider);
-        foreach(Transform child in tileObject.GetComponentsInChildren<Transform>(true))
-        {
-            if(child.name.StartsWith(SidePrefix)) Destroy(child.gameObject);
-        }
         foreach(Transform child in tileObject.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = layer;
         foreach(Renderer renderer in tileObject.GetComponentsInChildren<Renderer>(true))
         {
