@@ -63,6 +63,15 @@ public sealed class MenuFlow
         return true;
     }
 
+    /// <summary>No input for the inactivity timeout during a game: the board is discarded and the normal title shows.</summary>
+    public bool TimeOut()
+    {
+        if(!IsInGame) return false;
+        State = MenuState.Title;
+        ShowSuccessTitle = false;
+        return true;
+    }
+
     /// <summary>The board was completed: return to the title with the success title.</summary>
     public bool Complete()
     {

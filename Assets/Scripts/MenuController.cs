@@ -69,7 +69,14 @@ public sealed class MenuController : MonoBehaviour
     [SerializeField] private Toggle vibrationToggle;
     [SerializeField] private Slider soundSlider;
     [SerializeField] private Slider musicSlider;
+    [Tooltip("Inactivity timeout slider. Whole-number steps; each step is 5 seconds (3 = 15 s … 60 = 300 s).")]
+    [SerializeField] private Slider inactivitySlider;
+    [SerializeField] private TMP_Text inactivityValueText;
     [SerializeField] private Button settingsBackButton;
+
+    [Header("Inactivity")]
+    [Tooltip("Mouse or pen movement smaller than this (pixels) is ignored, so jitter cannot keep an abandoned game alive.")]
+    [Min(0f)] [SerializeField] private float pointerMoveThreshold = 4f;
 
     [Header("Pause")]
     [SerializeField] private Button pauseButton;
@@ -81,6 +88,9 @@ public sealed class MenuController : MonoBehaviour
 
     private readonly MenuFlow flow = new MenuFlow();
     private GameSettings settings;
+    private InactivityTimer inactivity;
+    private Vector2 lastPointerPosition;
+    private bool hasPointerPosition;
     private float successRemaining;
     private Coroutine completionRoutine;
     private Rect appliedSafeArea;
@@ -95,6 +105,8 @@ public sealed class MenuController : MonoBehaviour
 
         settings = new GameSettings(new PlayerPrefsSettingsStorage(), gameManager == null || gameManager.BlockedInputHapticsDefault);
         if(gameManager != null) gameManager.UseSettings(settings);
+        inactivity = new InactivityTimer(settings.InactivityTimeoutSeconds);
+        settings.Changed += () => inactivity.TimeoutSeconds = settings.InactivityTimeoutSeconds;
 
         Bind(playButton, OnPlay);
         Bind(settingsButton, OnOpenSettings);
@@ -131,6 +143,8 @@ public sealed class MenuController : MonoBehaviour
             action.performed += OnPauseAction;
             action.Enable();
         }
+
+        InputSystem.onEvent += OnInputEvent;
     }
 
     private void OnDisable()
@@ -144,6 +158,8 @@ public sealed class MenuController : MonoBehaviour
 
         InputAction action = pauseAction != null ? pauseAction.action : null;
         if(action != null) action.performed -= OnPauseAction;
+
+        InputSystem.onEvent -= OnInputEvent;
     }
 
     private void Start()
@@ -157,6 +173,8 @@ public sealed class MenuController : MonoBehaviour
     private void Update()
     {
         ApplySafeAreaIfChanged();
+
+        if(inactivity != null && inactivity.Tick(Time.unscaledDeltaTime, flow.IsInGame)) OnInactivityTimeout();
 
         if(flow.ShowSuccessTitle && !flow.IsInGame)
         {
@@ -241,7 +259,58 @@ public sealed class MenuController : MonoBehaviour
         if(flow.State != MenuState.Picker || gameManager == null) return;
         if(!gameManager.StartGame(columns, rows)) return;
         flow.StartGame();
+        inactivity.Reset();
         Refresh();
+    }
+
+    /// <summary>No input for the inactivity timeout during a game: drop the board and show the title, without asking.</summary>
+    private void OnInactivityTimeout()
+    {
+        if(!flow.IsInGame) return;
+        if(completionRoutine != null) StopCoroutine(completionRoutine);
+        completionRoutine = null;
+        gameManager.AbandonGame();
+        flow.TimeOut();
+        Refresh();
+    }
+
+    /// <summary>
+    /// Restarts the inactivity timer on real player input: any keyboard or touchscreen event, and mouse or pen
+    /// buttons, scrolling, or movement beyond <see cref="pointerMoveThreshold"/>. Other devices are ignored.
+    /// This sees input the board ignores (locked states, UI taps, pause), unlike gameplay actions.
+    /// </summary>
+    private void OnInputEvent(UnityEngine.InputSystem.LowLevel.InputEventPtr eventPtr, InputDevice device)
+    {
+        if(inactivity == null || device == null) return;
+        if(!eventPtr.IsA<UnityEngine.InputSystem.LowLevel.StateEvent>() && !eventPtr.IsA<UnityEngine.InputSystem.LowLevel.DeltaStateEvent>()) return;
+
+        if(device is Keyboard || device is Touchscreen)
+        {
+            inactivity.Reset();
+            return;
+        }
+
+        if(!(device is Pointer pointer)) return;
+
+        foreach(InputControl control in eventPtr.EnumerateChangedControls(device))
+        {
+            if(control is UnityEngine.InputSystem.Controls.ButtonControl || (device is Mouse mouse && control.parent == mouse.scroll))
+            {
+                inactivity.Reset();
+                return;
+            }
+
+            if(control.parent == pointer.position && pointer.position.ReadValueFromEvent(eventPtr, out Vector2 position))
+            {
+                if(!hasPointerPosition || (position - lastPointerPosition).sqrMagnitude >= pointerMoveThreshold * pointerMoveThreshold)
+                {
+                    if(hasPointerPosition) inactivity.Reset();
+                    lastPointerPosition = position;
+                    hasPointerPosition = true;
+                }
+                return;
+            }
+        }
     }
 
     private void OnPause()
@@ -313,6 +382,26 @@ public sealed class MenuController : MonoBehaviour
             musicSlider.SetValueWithoutNotify(settings.MusicVolume);
             musicSlider.onValueChanged.AddListener(value => settings.MusicVolume = value);
         }
+
+        if(inactivitySlider != null)
+        {
+            int step = GameSettings.InactivityTimeoutStepSeconds;
+            inactivitySlider.wholeNumbers = true;
+            inactivitySlider.minValue = GameSettings.MinInactivityTimeoutSeconds / step;
+            inactivitySlider.maxValue = GameSettings.MaxInactivityTimeoutSeconds / step;
+            inactivitySlider.SetValueWithoutNotify(settings.InactivityTimeoutSeconds / step);
+            inactivitySlider.onValueChanged.AddListener(value =>
+            {
+                settings.InactivityTimeoutSeconds = Mathf.RoundToInt(value) * step;
+                RefreshInactivityLabel();
+            });
+        }
+        RefreshInactivityLabel();
+    }
+
+    private void RefreshInactivityLabel()
+    {
+        if(inactivityValueText != null) inactivityValueText.text = $"{settings.InactivityTimeoutSeconds} s";
     }
 
     // ---- Presentation ------------------------------------------------------------------------

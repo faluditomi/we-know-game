@@ -83,6 +83,50 @@ public class MenuFlowTests
     }
 
     [Test]
+    public void TimeOutReturnsToTitleFromPlayingOrPaused()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        Assert.IsTrue(flow.TimeOut());
+        Assert.AreEqual(MenuState.Title, flow.State);
+
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.Pause();
+        Assert.IsTrue(flow.TimeOut());
+        Assert.AreEqual(MenuState.Title, flow.State);
+        Assert.IsFalse(flow.ShowSuccessTitle);
+    }
+
+    [Test]
+    public void TimeOutClearsAPendingSuccessTitle()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.Complete();
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.TimeOut();
+        Assert.IsFalse(flow.ShowSuccessTitle);
+    }
+
+    [Test]
+    public void TimeOutDoesNothingOnMenuScreens()
+    {
+        MenuFlow flow = ReadyFlow();
+        Assert.IsFalse(flow.TimeOut());
+        flow.OpenSettings();
+        Assert.IsFalse(flow.TimeOut());
+        Assert.AreEqual(MenuState.Settings, flow.State);
+        flow.CloseSettings();
+        flow.OpenPicker();
+        Assert.IsFalse(flow.TimeOut());
+        Assert.AreEqual(MenuState.Picker, flow.State);
+    }
+
+    [Test]
     public void InvalidTransitionsChangeNothing()
     {
         MenuFlow flow = ReadyFlow();

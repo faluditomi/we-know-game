@@ -32,11 +32,18 @@ public sealed class GameSettings
     public const string VibrationKey = "settings.vibration";
     public const string SoundVolumeKey = "settings.soundVolume";
     public const string MusicVolumeKey = "settings.musicVolume";
+    public const string InactivityTimeoutKey = "settings.inactivityTimeout";
+
+    public const int DefaultInactivityTimeoutSeconds = 60;
+    public const int MinInactivityTimeoutSeconds = 15;
+    public const int MaxInactivityTimeoutSeconds = 300;
+    public const int InactivityTimeoutStepSeconds = 5;
 
     private readonly ISettingsStorage storage;
     private bool vibration;
     private float soundVolume;
     private float musicVolume;
+    private int inactivityTimeoutSeconds;
 
     /// <summary>Raised after any setting changes.</summary>
     public event Action Changed;
@@ -47,6 +54,33 @@ public sealed class GameSettings
         vibration = storage.GetInt(VibrationKey, defaultVibration ? 1 : 0) != 0;
         soundVolume = Clamp01(storage.GetFloat(SoundVolumeKey, defaultSoundVolume));
         musicVolume = Clamp01(storage.GetFloat(MusicVolumeKey, defaultMusicVolume));
+        inactivityTimeoutSeconds = ClampTimeout(storage.GetInt(InactivityTimeoutKey, DefaultInactivityTimeoutSeconds));
+    }
+
+    /// <summary>
+    /// Seconds without input during a game before it returns to the title. 15–300 in 5-second steps.
+    /// </summary>
+    public int InactivityTimeoutSeconds
+    {
+        get => inactivityTimeoutSeconds;
+        set
+        {
+            int clamped = ClampTimeout(value);
+            if(inactivityTimeoutSeconds == clamped) return;
+            inactivityTimeoutSeconds = clamped;
+            storage.SetInt(InactivityTimeoutKey, clamped);
+            Commit();
+        }
+    }
+
+    /// <summary>Clamps to the allowed range and snaps to the nearest 5-second step.</summary>
+    public static int ClampTimeout(int seconds)
+    {
+        int step = InactivityTimeoutStepSeconds;
+        int snapped = (int)System.Math.Round(seconds / (double)step, System.MidpointRounding.AwayFromZero) * step;
+        return snapped < MinInactivityTimeoutSeconds ? MinInactivityTimeoutSeconds
+            : snapped > MaxInactivityTimeoutSeconds ? MaxInactivityTimeoutSeconds
+            : snapped;
     }
 
     public bool Vibration

@@ -887,8 +887,6 @@ public class GameManager : MonoBehaviour
         BoardCompleted?.Invoke();
     }
 
-    //TODO: after a certain amount of seconds, if a game is ongoing and there was no input, it automatically resets to the main menu
-
     //TODO: leaderboard system if we have time and willpower
 
     // ---- Cancellation ----------------------------------------------------------------------

@@ -55,6 +55,36 @@ public class GameSettingsTests
     }
 
     [Test]
+    public void InactivityTimeoutDefaultsTo60Seconds()
+    {
+        Assert.AreEqual(60, new GameSettings(new MemoryStorage()).InactivityTimeoutSeconds);
+    }
+
+    [TestCase(5, 15)]
+    [TestCase(15, 15)]
+    [TestCase(42, 40)]
+    [TestCase(43, 45)]
+    [TestCase(300, 300)]
+    [TestCase(1000, 300)]
+    public void InactivityTimeoutIsClampedAndSnappedToFiveSeconds(int requested, int expected)
+    {
+        GameSettings settings = new GameSettings(new MemoryStorage());
+        settings.InactivityTimeoutSeconds = requested;
+        Assert.AreEqual(expected, settings.InactivityTimeoutSeconds);
+    }
+
+    [Test]
+    public void InactivityTimeoutRoundTripsAndSanitisesStoredValues()
+    {
+        MemoryStorage storage = new MemoryStorage();
+        new GameSettings(storage).InactivityTimeoutSeconds = 90;
+        Assert.AreEqual(90, new GameSettings(storage).InactivityTimeoutSeconds);
+
+        storage.Values[GameSettings.InactivityTimeoutKey] = 2;
+        Assert.AreEqual(15, new GameSettings(storage).InactivityTimeoutSeconds);
+    }
+
+    [Test]
     public void ChangesRaiseTheEventOnlyWhenValuesChange()
     {
         GameSettings settings = new GameSettings(new MemoryStorage());
