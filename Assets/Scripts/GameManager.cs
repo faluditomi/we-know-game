@@ -791,7 +791,7 @@ public class GameManager : MonoBehaviour
         TileController left = firstScreen.x <= secondScreen.x ? first : second;
         TileController right = left == first ? second : first;
 
-        float depth = PresentationDepth(out float scaleMultiplier);
+        float depth = PresentationDepth(out float scaleMultiplier, out float presentedHalfExtent);
         float presentedHalfWidth = TileWorldWidth * scaleMultiplier * 0.5f;
         // How close the pair ends up: each tile drops its inner bezel as it joins, so the
         // centres finish nearer than a full tile width and the cut frame runs line up.
@@ -799,7 +799,8 @@ public class GameManager : MonoBehaviour
 
         if(presentationView != null)
         {
-            presentationView.ConfigureDepth(gameplayCamera, depth, BoardDistance());
+            // The dimmer goes behind everything the spinning tiles sweep through, so no part of them is ever dimmed.
+            presentationView.ConfigureDepth(gameplayCamera, depth + presentedHalfExtent, BoardDistance());
             presentationView.Show();
         }
 
@@ -870,19 +871,28 @@ public class GameManager : MonoBehaviour
     /// Depth in front of the camera for presented tiles, kept clear of the near plane and in front of
     /// the board, plus the scale multiplier that gives them the configured on-screen height.
     /// </summary>
-    private float PresentationDepth(out float scaleMultiplier)
+    private float PresentationDepth(out float scaleMultiplier, out float presentedHalfExtent)
     {
         TileAnimationSettings s = animationSettings;
         float boardDistance = BoardDistance();
         float depth = s.presentationDepth;
         if(boardDistance > 0f) depth = Mathf.Min(depth, boardDistance * 0.75f);
 
+        // While spinning, each tile swings half its extent behind its centre. Keep that clear of the
+        // board (and of the dimmer placed in front of it), or the far half of a turning tile is dimmed.
         scaleMultiplier = PresentationScale(depth);
-        float presentedHalfExtent = Mathf.Max(TileWorldWidth, TileWorldHeight) * scaleMultiplier * 0.5f;
+        presentedHalfExtent = PresentedHalfExtent(scaleMultiplier);
+        depth = BoardFraming.SpinClearDepth(depth, boardDistance, presentedHalfExtent / Mathf.Max(0.0001f, depth));
+
+        scaleMultiplier = PresentationScale(depth);
+        presentedHalfExtent = PresentedHalfExtent(scaleMultiplier);
         depth = BoardFraming.SafePresentationDepth(depth, gameplayCamera.nearClipPlane, presentedHalfExtent);
         scaleMultiplier = PresentationScale(depth);
+        presentedHalfExtent = PresentedHalfExtent(scaleMultiplier);
         return depth;
     }
+
+    private float PresentedHalfExtent(float scaleMultiplier) => Mathf.Max(TileWorldWidth, TileWorldHeight) * scaleMultiplier * 0.5f;
 
     private float PresentationScale(float depth)
     {

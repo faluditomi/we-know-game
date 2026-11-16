@@ -6,6 +6,11 @@
 // TileController tints _Hue per tile from the tile's own colour, through a
 // MaterialPropertyBlock, so every design keeps its identity without the frame
 // having to give the pair away.
+//
+// The same shader lights the face-down side of a matched pair while it is
+// presented. There the two tiles join into one wide panel, so _EdgeMask turns
+// off the inner edge glow on the seam side (x = left, y = right, z = bottom,
+// w = top; 1 = glow, 0 = none) and the pair reads as one continuous screen.
 Shader "WeKnow/Hologram Screen"
 {
     Properties
@@ -15,13 +20,18 @@ Shader "WeKnow/Hologram Screen"
         _HueStrength    ("Hue Strength", Range(0, 1))      = 0.30
         [HDR] _GlowColor("Emission", Color)                = (0.18, 0.28, 0.30, 1)
         _ScanCount      ("Scanline Count", Range(0, 400))  = 150
-        _ScanStrength   ("Scanline Strength", Range(0, 1)) = 0.12
-        _ScanSpeed      ("Scanline Drift", Range(-4, 4))   = 0.22
-        _SweepStrength  ("Sweep Strength", Range(0, 1))    = 0.10
-        _SweepSpeed     ("Sweep Speed", Range(0, 4))       = 0.45
-        _EdgeGlow       ("Edge Glow", Range(0, 2))         = 0.55
+        _ScanStrength   ("Scanline Strength", Range(0, 1)) = 0.20
+        _ScanSpeed      ("Scanline Drift", Range(-4, 4))   = 0.18
+        _SweepStrength  ("Sweep Strength", Range(0, 1))    = 0.26
+        _SweepSpeed     ("Sweep Speed", Range(0, 4))       = 0.90
+        _Sweep2Strength ("Second Sweep Strength", Range(0, 1)) = 0.16
+        _Sweep2Speed    ("Second Sweep Speed", Range(-4, 4))   = -1.55
+        _GlitchStrength ("Glitch Band Strength", Range(0, 1))  = 0.10
+        _EdgeGlow       ("Edge Glow", Range(0, 2))         = 0.85
         _EdgeWidth      ("Edge Width", Range(0.001, 0.5))  = 0.07
-        _Flicker        ("Flicker", Range(0, 0.2))         = 0.02
+        _Flicker        ("Flicker", Range(0, 0.2))         = 0.03
+        _EdgeMask       ("Edge Mask (L, R, B, T)", Vector) = (1, 1, 1, 1)
+        _Brightness     ("Brightness", Range(0, 2))        = 0.85
     }
 
     SubShader
@@ -70,9 +80,14 @@ Shader "WeKnow/Hologram Screen"
                 float  _ScanSpeed;
                 float  _SweepStrength;
                 float  _SweepSpeed;
+                float  _Sweep2Strength;
+                float  _Sweep2Speed;
+                float  _GlitchStrength;
                 float  _EdgeGlow;
                 float  _EdgeWidth;
                 float  _Flicker;
+                float4 _EdgeMask;
+                float  _Brightness;
             CBUFFER_END
 
             Varyings vert (Attributes v)
@@ -108,19 +123,32 @@ Shader "WeKnow/Hologram Screen"
                 float sweep = frac(panel.y - _Time.y * _SweepSpeed);
                 col += hue * _SweepStrength * pow(saturate(1.0 - abs(sweep - 0.5) * 3.0), 3.0);
 
+                // A thinner, faster band running the other way, so the two cross now and then.
+                float sweep2 = frac(panel.y - _Time.y * _Sweep2Speed);
+                col += hue * _Sweep2Strength * pow(saturate(1.0 - abs(sweep2 - 0.5) * 8.0), 2.0);
+
+                // Short bright glitch bands that jump to a new height several times a second.
+                float slot = floor(_Time.y * 5.0);
+                float bandY = frac(sin(slot * 12.9898) * 43758.5453);
+                float bandOn = step(0.55, frac(sin(slot * 78.233) * 12543.123));
+                float band = 1.0 - smoothstep(0.0, 0.025, abs(panel.y - bandY));
+                col += hue * _GlitchStrength * band * bandOn;
+
                 // Inner edge glow, so the panel reads as inset glass.
-                float2 d = min(panel, 1.0 - panel);
-                float edge = 1.0 - smoothstep(0.0, _EdgeWidth, min(d.x, d.y));
+                // Masked-off edges are pushed out of reach so they never glow.
+                float4 d = float4(panel.x, 1.0 - panel.x, panel.y, 1.0 - panel.y)
+                         + (1.0 - saturate(_EdgeMask)) * 2.0;
+                float edge = 1.0 - smoothstep(0.0, _EdgeWidth, min(min(d.x, d.y), min(d.z, d.w)));
                 col += hue * _EdgeGlow * edge * 0.5;
 
                 // Barely-there flicker: enough to feel alive, not enough to distract.
                 col *= 1.0 + _Flicker * sin(_Time.y * 37.0) * 0.5;
 
-                // One cheap diffuse term keeps the panel sitting in the scene's lighting.
-                Light main = GetMainLight();
-                float3 n = normalize(i.normalWS);
-                float ndotl = saturate(dot(n, main.direction));
-                float3 lit = col * (0.65 + 0.35 * ndotl * main.color);
+                // A screen is self-lit: its brightness must not change as the tile turns
+                // relative to the scene light (a diffuse term made one face of a spinning
+                // tile visibly darker than the other). _Brightness matches the old lit
+                // value with the panel facing the camera.
+                float3 lit = col * _Brightness;
 
                 lit += _GlowColor.rgb * lerp(float3(1.0, 1.0, 1.0), hue, _HueStrength);
                 return half4(lit, 1.0);
@@ -145,7 +173,8 @@ Shader "WeKnow/Hologram Screen"
                 float4 _BaseColor; float4 _Hue; float _HueStrength; float4 _GlowColor;
                 float _ScanCount; float _ScanStrength; float _ScanSpeed;
                 float _SweepStrength; float _SweepSpeed;
-                float _EdgeGlow; float _EdgeWidth; float _Flicker;
+                float _Sweep2Strength; float _Sweep2Speed; float _GlitchStrength;
+                float _EdgeGlow; float _EdgeWidth; float _Flicker; float4 _EdgeMask; float _Brightness;
             CBUFFER_END
             struct A { float4 positionOS : POSITION; };
             struct V { float4 positionCS : SV_POSITION; };

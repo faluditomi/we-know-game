@@ -69,4 +69,17 @@ public static class BoardFraming
     {
         return Mathf.Max(requestedDepth, nearClipPlane + Mathf.Max(0f, tileHalfExtent) + 0.05f);
     }
+
+    /// <summary>
+    /// Deepest presentation depth at which a tile spinning in place stays well in front of the board.
+    /// A spinning tile swings its half-extent behind its centre, and that half-extent grows with depth
+    /// because presented tiles keep a fixed on-screen size: <paramref name="halfExtentPerDepth"/> is that
+    /// ratio. The swept volume ends at <paramref name="clearance"/> of the board distance, leaving room
+    /// behind it for the dimmer.
+    /// </summary>
+    public static float SpinClearDepth(float requestedDepth, float boardDistance, float halfExtentPerDepth, float clearance = 0.85f)
+    {
+        if(boardDistance <= 0f) return requestedDepth;
+        return Mathf.Min(requestedDepth, boardDistance * clearance / (1f + Mathf.Max(0f, halfExtentPerDepth)));
+    }
 }

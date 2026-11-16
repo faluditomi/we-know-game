@@ -91,15 +91,16 @@ public sealed class MatchPresentationView : MonoBehaviour
 
     /// <summary>
     /// When the canvas renders through a camera, place it between the presented tiles and the board so
-    /// the dimmer covers the board but not the presented tiles.
+    /// the dimmer covers the board but not the presented tiles. <paramref name="presentedFarDepth"/> is the
+    /// deepest point the presented tiles reach, including the half that swings back while they spin.
     /// </summary>
-    public void ConfigureDepth(Camera gameplayCamera, float presentationDepth, float boardDistance)
+    public void ConfigureDepth(Camera gameplayCamera, float presentedFarDepth, float boardDistance)
     {
         Initialise();
         if(canvas == null || canvas.renderMode != RenderMode.ScreenSpaceCamera) return;
         if(canvas.worldCamera == null) canvas.worldCamera = gameplayCamera;
-        float far = boardDistance > presentationDepth ? boardDistance : presentationDepth + 1f;
-        canvas.planeDistance = Mathf.Lerp(presentationDepth, far, 0.5f);
+        float far = boardDistance > presentedFarDepth ? boardDistance : presentedFarDepth + 1f;
+        canvas.planeDistance = Mathf.Lerp(presentedFarDepth, far, 0.5f);
     }
 
     private void Initialise()

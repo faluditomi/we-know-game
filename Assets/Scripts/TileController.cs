@@ -14,6 +14,8 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private static readonly int BaseMapStId = Shader.PropertyToID("_BaseMap_ST");
     private static readonly int ClipRectId = Shader.PropertyToID("_ClipRect");
     private static readonly int HueId = Shader.PropertyToID("_Hue");
+    private static readonly int EdgeMaskId = Shader.PropertyToID("_EdgeMask");
+    private static readonly int OpacityId = Shader.PropertyToID("_Opacity");
     private const string ClipRectKeyword = "UNITY_UI_CLIP_RECT";
     private const float RevealedAngle = 180f;
     private const float SeamOverlapFraction = 0.02f;
@@ -35,6 +37,16 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     [Range(0f, 1f)]
     [Tooltip("How much of the tile's colour reaches the hologram panel. Low values keep dark logo artwork readable.")]
     [SerializeField] private float screenHueStrength = 0.3f;
+
+    [Header("Found pair face")]
+    [Tooltip("Plate on the face-down side. Switched to the pair screen material while a found pair is presented, so the joined pair reads as one hologram screen.")]
+    [SerializeField] private Renderer pairScreenRenderer;
+    [Tooltip("Hologram material used on the face-down plate during the found-pair presentation. Leave empty to keep the plate's own material.")]
+    [SerializeField] private Material pairScreenMaterial;
+    [Tooltip("Quad on the face-down side, between the plate and the description. Shows this tile's half of the matched logo, faded, so the joined pair shows the whole logo centred behind the text.")]
+    [SerializeField] private Renderer pairLogoRenderer;
+    [Tooltip("Largest width and height of the logo across the joined pair, in tile units. The logo keeps its aspect ratio inside this box.")]
+    [SerializeField] private Vector2 pairLogoBounds = new Vector2(1.1f, 0.62f);
 
     [Header("Pair seam")]
     [Tooltip("Bezel parts swapped for seam-clipped meshes while a matched pair is joined, so the two tiles read as one wide panel. Leave empty on decorative tiles.")]
@@ -76,6 +88,13 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private MaterialPropertyBlock bodyBlock;
     private MaterialPropertyBlock logoBlock;
     private MaterialPropertyBlock screenBlock;
+    private MaterialPropertyBlock pairScreenBlock;
+    private MaterialPropertyBlock pairLogoBlock;
+    private Material pairScreenOriginalMaterial;
+    private Color screenHue = Color.white;
+    private float pairLogoBaseZ;
+    private float pairLogoOpacity = 1f;
+    private Vector3 pairScreenBaseLocalScale = Vector3.one;
     private bool seamClipped;
     private bool seamLeftHalf = true;
     private Vector3 logoBaseLocalScale = Vector3.one;
@@ -168,6 +187,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         if(screenRenderer == null) return;
         Color hue = Color.Lerp(Color.white, tileColour, Mathf.Clamp01(screenHueStrength));
         hue.a = 1f;
+        screenHue = hue;
         screenBlock.SetColor(HueId, hue);
         screenRenderer.SetPropertyBlock(screenBlock);
     }
@@ -250,6 +270,8 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         }
 
         SetSeamClip(visible, leftHalf);
+        SetPairScreen(visible, leftHalf);
+        SetPairLogo(visible, leftHalf);
 
         if(descriptionText == null) return;
         if(visible) ConfigureDescriptionHalf(leftHalf);
@@ -297,6 +319,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     /// </summary>
     public void SetSeamRetract(float retract)
     {
+        SetPairScreenSeam(retract);
         Transform inner = seamLeftHalf ? seamCapRight : seamCapLeft;
         if(inner == null || !inner.gameObject.activeSelf) return;
         inner.localScale = new Vector3(Mathf.Clamp01(1f - retract), 1f, 1f);
@@ -307,6 +330,87 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     /// because each tile gives up the bezel on its inner side.
     /// </summary>
     public float SeamJoinWidth => seamClipParts != null && seamClipParts.Length > 0 ? seamHalfWidth * 2f : 1f;
+
+    /// <summary>
+    /// Lights the face-down plate with the hologram while the pair is presented. The inner edge glow is
+    /// turned off on the seam side, so the two plates read as one continuous screen.
+    /// </summary>
+    private void SetPairScreen(bool visible, bool leftHalf)
+    {
+        if(pairScreenRenderer == null || pairScreenMaterial == null) return;
+        pairScreenRenderer.sharedMaterial = visible ? pairScreenMaterial : pairScreenOriginalMaterial;
+        // The two plates meet exactly at the seam, which leaves a hairline of background between them.
+        // Widening each a touch overlaps them there; the outer edge stays hidden under the bezel.
+        Vector3 scale = pairScreenBaseLocalScale;
+        if(visible) scale.x *= 1f + SeamOverlapFraction;
+        pairScreenRenderer.transform.localScale = scale;
+        pairScreenBlock.Clear();
+        if(visible)
+        {
+            pairScreenBlock.SetColor(HueId, screenHue);
+            // All four edges glow while the tiles spin apart; SetSeamRetract fades the seam edge as they join.
+            pairScreenBlock.SetVector(EdgeMaskId, Vector4.one);
+        }
+        pairScreenRenderer.SetPropertyBlock(pairScreenBlock);
+    }
+
+    /// <summary>
+    /// Fades the inner edge glow on the seam side out, and the pair logo in, as <paramref name="retract"/>
+    /// goes from 0 to 1. Follows the bezel retraction, so the screen looks even on both sides while the
+    /// tiles spin and reads as one panel, logo included, once they meet.
+    /// </summary>
+    private void SetPairScreenSeam(float retract)
+    {
+        if(pairLogoRenderer != null && pairLogoRenderer.enabled)
+        {
+            pairLogoBlock.SetFloat(OpacityId, pairLogoOpacity * Mathf.Clamp01(retract));
+            pairLogoRenderer.SetPropertyBlock(pairLogoBlock);
+        }
+
+        if(pairScreenRenderer == null || pairScreenMaterial == null || pairScreenRenderer.sharedMaterial != pairScreenMaterial) return;
+        float seam = Mathf.Clamp01(1f - retract);
+        // The seam is on this tile's right edge (local +X) when it is the left half, and vice versa.
+        pairScreenBlock.SetVector(EdgeMaskId, seamLeftHalf ? new Vector4(1f, seam, 1f, 1f) : new Vector4(seam, 1f, 1f, 1f));
+        pairScreenRenderer.SetPropertyBlock(pairScreenBlock);
+    }
+
+    /// <summary>
+    /// Shows this tile's half of the matched logo, faded, on the face-down side. The logo is centred on the seam,
+    /// so the joined pair shows it whole behind the description, the same way the text is split.
+    /// </summary>
+    private void SetPairLogo(bool visible, bool leftHalf)
+    {
+        if(pairLogoRenderer == null) return;
+        Sprite logo = tile != null ? tile.backLogo : null;
+        bool show = visible && logo != null;
+        pairLogoRenderer.enabled = show;
+        if(!show) return;
+
+        Texture2D texture = logo.texture;
+        Rect rect = logo.textureRect;
+        float aspect = rect.height > 0f ? rect.width / rect.height : 1f;
+        Vector2 bounds = new Vector2(Mathf.Max(0.01f, pairLogoBounds.x), Mathf.Max(0.01f, pairLogoBounds.y));
+        Vector2 size = aspect >= bounds.x / bounds.y
+            ? new Vector2(bounds.x, bounds.x / aspect)
+            : new Vector2(bounds.y * aspect, bounds.y);
+
+        float halfWidth = size.x * 0.5f;
+        float seamX = (leftHalf ? 0.5f : -0.5f) * SeamJoinWidth;
+        Transform logoTransform = pairLogoRenderer.transform;
+        logoTransform.localPosition = new Vector3(seamX + (leftHalf ? -0.5f : 0.5f) * halfWidth, 0f, pairLogoBaseZ);
+        logoTransform.localScale = new Vector3(halfWidth, size.y, 1f);
+
+        float u = rect.x / texture.width;
+        float uSpan = rect.width / texture.width;
+        // Hidden until the tiles join: while they spin apart, each would show half a logo on one
+        // side only, which reads as one side of the tile being darker. SetSeamRetract fades it in.
+        pairLogoBlock.SetFloat(OpacityId, 0f);
+        pairLogoBlock.SetTexture(BaseMapId, texture);
+        pairLogoBlock.SetVector(BaseMapStId, new Vector4(
+            uSpan * 0.5f, rect.height / texture.height,
+            u + (leftHalf ? 0f : uSpan * 0.5f), rect.y / texture.height));
+        pairLogoRenderer.SetPropertyBlock(pairLogoBlock);
+    }
 
     private void ConfigureDescriptionHalf(bool leftHalf)
     {
@@ -443,6 +547,20 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         bodyBlock = new MaterialPropertyBlock();
         logoBlock = new MaterialPropertyBlock();
         screenBlock = new MaterialPropertyBlock();
+        pairScreenBlock = new MaterialPropertyBlock();
+        pairLogoBlock = new MaterialPropertyBlock();
+        if(pairScreenRenderer != null)
+        {
+            pairScreenOriginalMaterial = pairScreenRenderer.sharedMaterial;
+            pairScreenBaseLocalScale = pairScreenRenderer.transform.localScale;
+        }
+        if(pairLogoRenderer != null)
+        {
+            pairLogoBaseZ = pairLogoRenderer.transform.localPosition.z;
+            Material logoMaterial = pairLogoRenderer.sharedMaterial;
+            if(logoMaterial != null && logoMaterial.HasProperty(OpacityId)) pairLogoOpacity = logoMaterial.GetFloat(OpacityId);
+            pairLogoRenderer.enabled = false;
+        }
 
         bool usedFallback = false;
 

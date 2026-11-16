@@ -54,6 +54,16 @@ public class BoardFramingTests
     }
 
     [Test]
+    public void SpinningTilesStayClearOfTheBoard()
+    {
+        // Half-extent of 0.35 per unit of depth: a tile at depth d sweeps back to 1.35 d while spinning.
+        float depth = BoardFraming.SpinClearDepth(10f, 4f, 0.35f);
+        Assert.LessOrEqual(depth * 1.35f, 4f * 0.85f + Tolerance);
+        Assert.AreEqual(2f, BoardFraming.SpinClearDepth(2f, 4f, 0.35f), Tolerance, "already clear: unchanged");
+        Assert.AreEqual(3f, BoardFraming.SpinClearDepth(3f, 0f, 0.35f), Tolerance, "no board: unchanged");
+    }
+
+    [Test]
     public void InvalidInputReturnsDefault()
     {
         BoardFraming.Result fit = BoardFraming.Fit(Vector2.zero, 1.5f, 60f, false, FullScreen);
