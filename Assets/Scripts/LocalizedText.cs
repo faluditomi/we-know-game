@@ -24,6 +24,7 @@ public static class LocalizedText
     public const string Continue = "Continue";
     public const string MainMenu = "MainMenu";
     public const string Vibration = "Vibration";
+    public const string BatterySaver = "BatterySaver";
     public const string Sound = "Sound";
     public const string Music = "Music";
     public const string Inactivity = "Inactivity";
@@ -47,7 +48,7 @@ public static class LocalizedText
     public static readonly string[] AllKeys =
     {
         Play, Settings, Exit, Back, ChooseBoard, PickerHint, PickerSize, TooSmall, OddCount, TooManyPairs,
-        OutOfGrid, Paused, Continue, MainMenu, Vibration, Sound, Music, Inactivity, Language, SecondsValue,
+        OutOfGrid, Paused, Continue, MainMenu, Vibration, BatterySaver, Sound, Music, Inactivity, Language, SecondsValue,
         TapToContinue, LoadFailed, InactivityHint,
         StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator
     };
@@ -69,6 +70,7 @@ public static class LocalizedText
         { Continue, "CONTINUE" },
         { MainMenu, "MAIN MENU" },
         { Vibration, "VIBRATION" },
+        { BatterySaver, "BATTERY SAVER" },
         { Sound, "SOUND" },
         { Music, "MUSIC" },
         { Inactivity, "INACTIVITY" },
@@ -101,6 +103,7 @@ public static class LocalizedText
         { Continue, "FOLYTATÁS" },
         { MainMenu, "FŐMENÜ" },
         { Vibration, "REZGÉS" },
+        { BatterySaver, "TAKARÉKOS MÓD" },
         { Sound, "HANG" },
         { Music, "ZENE" },
         { Inactivity, "TÉTLENSÉG" },

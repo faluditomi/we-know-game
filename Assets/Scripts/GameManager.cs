@@ -8,6 +8,7 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
@@ -58,10 +59,10 @@ public class GameManager : MonoBehaviour
     [Tooltip("Optional. Without it, matched tiles are still presented and continued, but no description UI is shown.")]
     [SerializeField] private MatchPresentationView presentationView;
 
-    [Header("Blocked input feedback")]
-    [Tooltip("Short device vibration when the player taps while input is locked. Visual state remains the primary signal.")]
-    [SerializeField] private bool blockedInputHaptics = true;
-    [Min(0.1f)] [SerializeField] private float blockedFeedbackCooldown = 1f;
+    [Header("Haptics")]
+    [Tooltip("Fresh-install default for the vibration setting: a short jolt on a mismatched pair and a fanfare on a win.")]
+    [FormerlySerializedAs("blockedInputHaptics")]
+    [SerializeField] private bool vibrationDefault = true;
 
     [Header("Victory")]
     [Tooltip("Confetti for the victory moment. Optional: without it the moment plays without confetti.")]
@@ -108,7 +109,6 @@ public class GameManager : MonoBehaviour
     private PointerEventData uiPointerData;
     private EventSystem uiPointerDataOwner;
     private bool continueArmed;
-    private float nextBlockedFeedbackTime;
 
     private Coroutine revealRoutine;
     private Coroutine sequenceRoutine;
@@ -164,7 +164,7 @@ public class GameManager : MonoBehaviour
     public IReadOnlyList<Tile> TileVariations => tileVariations != null ? (IReadOnlyList<Tile>)tileVariations : Array.Empty<Tile>();
 
     /// <summary>Fresh-install default for the vibration setting.</summary>
-    public bool BlockedInputHapticsDefault => blockedInputHaptics;
+    public bool VibrationDefault => vibrationDefault;
 
     /// <summary>Uses the player's settings (vibration, tile description language) instead of the serialized defaults.</summary>
     public void UseSettings(GameSettings gameSettings)
@@ -246,7 +246,6 @@ public class GameManager : MonoBehaviour
         // Drop any half-finished gesture and require a fresh press after resuming.
         gesture = default;
         continueArmed = false;
-        nextBlockedFeedbackTime = 0f;
     }
 
     private void Update()
@@ -632,11 +631,7 @@ public class GameManager : MonoBehaviour
         // The gesture that started or resumed the game must lift before the board takes taps.
         if(!boardInputArmed) return;
 
-        if(!flow.AcceptsSelection)
-        {
-            if(flow.IsLocked && flow.State != MatchFlowState.Complete) TriggerBlockedFeedback();
-            return;
-        }
+        if(!flow.AcceptsSelection) return;
 
         if(IsPointerOverBlockingUI(position)) return;
 
@@ -728,14 +723,11 @@ public class GameManager : MonoBehaviour
         return false;
     }
 
-    private void TriggerBlockedFeedback()
+    private bool VibrationEnabled => settings != null ? settings.Vibration : vibrationDefault;
+
+    private void TriggerMismatchVibration()
     {
-        bool vibrationEnabled = settings != null ? settings.Vibration : blockedInputHaptics;
-        if(!vibrationEnabled || Time.unscaledTime < nextBlockedFeedbackTime) return;
-        nextBlockedFeedbackTime = Time.unscaledTime + blockedFeedbackCooldown;
-#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
-        Handheld.Vibrate();
-#endif
+        if(VibrationEnabled) Haptics.Jolt();
     }
 
     // ---- Match flow ------------------------------------------------------------------------
@@ -793,6 +785,8 @@ public class GameManager : MonoBehaviour
 
         yield return Wait(s.mismatchRevealHold);
 
+        // The jolt lands with the shake, the moment the mismatch is signalled.
+        TriggerMismatchVibration();
         float amplitude = s.shakeAmplitude * TileWorldWidth;
         yield return Animate(s.shakeDuration, null, t =>
         {
@@ -914,7 +908,7 @@ public class GameManager : MonoBehaviour
 
     /// <summary>
     /// The victory moment on the completed board: a wave of hopping tiles from the last pair outward, a surge
-    /// on every tile screen, a confetti burst, a small camera punch and one vibration. One pause-aware timeline
+    /// on every tile screen, a confetti burst, a small camera punch and a fanfare-rhythm vibration. One pause-aware timeline
     /// drives all of it; <see cref="VictoryFinished"/> is raised when it ends.
     /// </summary>
     private IEnumerator PlayVictory(Vector3 origin)
@@ -991,11 +985,7 @@ public class GameManager : MonoBehaviour
 
     private void TriggerWinVibration()
     {
-        bool vibrationEnabled = settings != null ? settings.Vibration : blockedInputHaptics;
-        if(!vibrationEnabled) return;
-#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
-        Handheld.Vibrate();
-#endif
+        if(VibrationEnabled) Haptics.Fanfare();
     }
 
     /// <summary>

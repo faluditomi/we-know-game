@@ -34,6 +34,7 @@ public sealed class GameSettings
     public const string MusicVolumeKey = "settings.musicVolume";
     public const string InactivityTimeoutKey = "settings.inactivityTimeout";
     public const string LanguageKey = "settings.language";
+    public const string BatterySaverKey = "settings.batterySaver";
 
     public const int DefaultInactivityTimeoutSeconds = 60;
     public const int MinInactivityTimeoutSeconds = 15;
@@ -46,6 +47,7 @@ public sealed class GameSettings
     private float musicVolume;
     private int inactivityTimeoutSeconds;
     private GameLanguage language;
+    private bool batterySaver;
 
     /// <summary>Raised after any setting changes.</summary>
     public event Action Changed;
@@ -59,6 +61,20 @@ public sealed class GameSettings
         inactivityTimeoutSeconds = ClampTimeout(storage.GetInt(InactivityTimeoutKey, DefaultInactivityTimeoutSeconds));
         int storedLanguage = storage.GetInt(LanguageKey, (int)GameLanguage.English);
         language = GameLanguages.IsDefined(storedLanguage) ? (GameLanguage)storedLanguage : GameLanguage.English;
+        batterySaver = storage.GetInt(BatterySaverKey, 0) != 0;
+    }
+
+    /// <summary>Caps the frame rate at 60 instead of the screen's full refresh rate. Off on first launch.</summary>
+    public bool BatterySaver
+    {
+        get => batterySaver;
+        set
+        {
+            if(batterySaver == value) return;
+            batterySaver = value;
+            storage.SetInt(BatterySaverKey, value ? 1 : 0);
+            Commit();
+        }
     }
 
     /// <summary>Display language. English on first launch; unknown stored values read as English.</summary>

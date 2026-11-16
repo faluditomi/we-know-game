@@ -41,6 +41,32 @@ public class GameSettingsTests
     }
 
     [Test]
+    public void BatterySaverIsOffByDefaultAndRoundTrips()
+    {
+        MemoryStorage storage = new MemoryStorage();
+        GameSettings first = new GameSettings(storage);
+        Assert.IsFalse(first.BatterySaver);
+
+        int changes = 0;
+        first.Changed += () => changes++;
+        first.BatterySaver = true;
+        first.BatterySaver = true; // unchanged: no second notification
+        Assert.AreEqual(1, changes);
+
+        Assert.IsTrue(new GameSettings(storage).BatterySaver);
+    }
+
+    [Test]
+    public void FrameRateTargetFollowsScreenAndBatterySaver()
+    {
+        Assert.AreEqual(120, FrameRate.Target(120, batterySaver: false));
+        Assert.AreEqual(60, FrameRate.Target(120, batterySaver: true));
+        Assert.AreEqual(90, FrameRate.Target(90, batterySaver: false));
+        Assert.AreEqual(50, FrameRate.Target(50, batterySaver: true));
+        Assert.AreEqual(60, FrameRate.Target(0, batterySaver: false));
+    }
+
+    [Test]
     public void VolumesAreClamped()
     {
         MemoryStorage storage = new MemoryStorage();

@@ -82,6 +82,8 @@ public sealed class MenuController : MonoBehaviour
 
     [Header("Settings")]
     [SerializeField] private Toggle vibrationToggle;
+    [Tooltip("Battery saver: caps the frame rate at 60 instead of the screen's refresh rate.")]
+    [SerializeField] private Toggle batterySaverToggle;
     [SerializeField] private Slider soundSlider;
     [SerializeField] private Slider musicSlider;
     [Tooltip("Inactivity timeout slider. Whole-number steps; each step is 5 seconds (3 = 15 s … 60 = 300 s).")]
@@ -116,6 +118,7 @@ public sealed class MenuController : MonoBehaviour
     private Vector2Int appliedScreenSize;
     private LocalizedLabel[] localizedLabels = Array.Empty<LocalizedLabel>();
     private GameLanguage appliedLanguage;
+    private bool appliedBatterySaver;
     private string statusKey;
     private float titleEntranceElapsed = -1f;
     private Vector2 settingsAnchorMin, settingsAnchorMax, settingsPivot, settingsPosition;
@@ -127,11 +130,13 @@ public sealed class MenuController : MonoBehaviour
     {
         if(gameManager == null) gameManager = FindFirstObjectByType<GameManager>();
 
-        settings = new GameSettings(new PlayerPrefsSettingsStorage(), gameManager == null || gameManager.BlockedInputHapticsDefault);
+        settings = new GameSettings(new PlayerPrefsSettingsStorage(), gameManager == null || gameManager.VibrationDefault);
         if(gameManager != null) gameManager.UseSettings(settings);
         inactivity = new InactivityTimer(settings.InactivityTimeoutSeconds);
         settings.Changed += () => inactivity.TimeoutSeconds = settings.InactivityTimeoutSeconds;
         settings.Changed += OnSettingsChanged;
+        appliedBatterySaver = settings.BatterySaver;
+        FrameRate.Apply(appliedBatterySaver);
 
         // Includes labels on inactive screens and outside this hierarchy (e.g. the match presentation prompt).
         localizedLabels = FindObjectsByType<LocalizedLabel>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -416,6 +421,12 @@ public sealed class MenuController : MonoBehaviour
             vibrationToggle.onValueChanged.AddListener(value => settings.Vibration = value);
         }
 
+        if(batterySaverToggle != null)
+        {
+            batterySaverToggle.SetIsOnWithoutNotify(settings.BatterySaver);
+            batterySaverToggle.onValueChanged.AddListener(value => settings.BatterySaver = value);
+        }
+
         if(soundSlider != null)
         {
             soundSlider.minValue = 0f;
@@ -472,6 +483,11 @@ public sealed class MenuController : MonoBehaviour
     private void OnSettingsChanged()
     {
         if(settings.Language != appliedLanguage) ApplyLanguage();
+        if(settings.BatterySaver != appliedBatterySaver)
+        {
+            appliedBatterySaver = settings.BatterySaver;
+            FrameRate.Apply(appliedBatterySaver);
+        }
     }
 
     /// <summary>Shows every localized label, the picker messages and code-driven texts in the current language. The title stays English.</summary>
