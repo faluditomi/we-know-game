@@ -25,7 +25,7 @@ public sealed class PlayerPrefsSettingsStorage : ISettingsStorage
 
 /// <summary>
 /// Player settings persisted as primitive values. Changes are stored and announced immediately.
-/// Sound and music volumes are kept for future audio; nothing plays yet.
+/// The sound volume scales every <see cref="SoundEffects"/> cue. The music volume is kept for future music; no music plays yet.
 /// </summary>
 public sealed class GameSettings
 {

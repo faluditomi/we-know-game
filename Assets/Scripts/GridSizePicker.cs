@@ -37,6 +37,9 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
     /// <summary>Raised with (columns, rows) when the player releases a valid selection.</summary>
     public event Action<int, int> SelectionConfirmed;
 
+    /// <summary>Raised when a press starts a selection and each time the drag reaches a different cell.</summary>
+    public event Action SelectionChanged;
+
     public int Size => size;
 
     private void Awake()
@@ -115,6 +118,7 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
         currentCell = cell;
         showingSelection = true;
         RefreshSelection();
+        SelectionChanged?.Invoke();
     }
 
     public void OnDrag(PointerEventData eventData)
@@ -123,6 +127,7 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
         if(!TryGetCell(eventData, true, out Vector2Int cell) || cell == currentCell) return;
         currentCell = cell;
         RefreshSelection();
+        SelectionChanged?.Invoke();
     }
 
     public void OnPointerUp(PointerEventData eventData)

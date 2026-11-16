@@ -64,6 +64,10 @@ public class GameManager : MonoBehaviour
     [FormerlySerializedAs("blockedInputHaptics")]
     [SerializeField] private bool vibrationDefault = true;
 
+    [Header("Sound")]
+    [Tooltip("Sound effects for flips, matches, mismatches and the victory. Falls back to the first one in the scene; without one the board is silent.")]
+    [SerializeField] private SoundEffects soundEffects;
+
     [Header("Victory")]
     [Tooltip("Confetti for the victory moment. Optional: without it the moment plays without confetti.")]
     [SerializeField] private VictoryEffects victoryEffects;
@@ -188,6 +192,7 @@ public class GameManager : MonoBehaviour
     private void Awake()
     {
         animationSettings.Validate();
+        if(soundEffects == null) soundEffects = FindFirstObjectByType<SoundEffects>();
         BeginSetup();
     }
 
@@ -730,6 +735,11 @@ public class GameManager : MonoBehaviour
         if(VibrationEnabled) Haptics.Jolt();
     }
 
+    private void PlaySound(SoundCue cue)
+    {
+        if(soundEffects != null) soundEffects.Play(cue);
+    }
+
     // ---- Match flow ------------------------------------------------------------------------
 
     private void HandleTileTap(TileController tile)
@@ -740,6 +750,7 @@ public class GameManager : MonoBehaviour
         switch(result)
         {
             case MatchSelectionResult.FirstSelected:
+                PlaySound(SoundCue.TileFlip);
                 tile.SetRevealed(true);
                 revealRoutine = StartCoroutine(RevealFirst(tile));
                 break;
@@ -747,6 +758,7 @@ public class GameManager : MonoBehaviour
             case MatchSelectionResult.Mismatch:
             case MatchSelectionResult.Match:
                 StopRoutine(ref revealRoutine);
+                PlaySound(SoundCue.TileFlip);
                 sequenceRoutine = StartCoroutine(ResolvePair(flow.First, flow.Second, result == MatchSelectionResult.Match, generation));
                 break;
         }
@@ -785,8 +797,9 @@ public class GameManager : MonoBehaviour
 
         yield return Wait(s.mismatchRevealHold);
 
-        // The jolt lands with the shake, the moment the mismatch is signalled.
+        // The jolt and the error sound land with the shake, the moment the mismatch is signalled.
         TriggerMismatchVibration();
+        PlaySound(SoundCue.Mismatch);
         float amplitude = s.shakeAmplitude * TileWorldWidth;
         yield return Animate(s.shakeDuration, null, t =>
         {
@@ -799,6 +812,7 @@ public class GameManager : MonoBehaviour
         first.ClearMismatchFeedback();
         second.ClearMismatchFeedback();
 
+        PlaySound(SoundCue.TileFlipBack);
         yield return Animate(s.flipDuration, s.flipCurve, t =>
         {
             first.SetFlipAngle(Mathf.Lerp(180f, 0f, t));
@@ -836,6 +850,7 @@ public class GameManager : MonoBehaviour
             presentationView.Show();
         }
 
+        PlaySound(SoundCue.Match);
         left.SetPresentationFace(true, leftHalf: true);
         right.SetPresentationFace(true, leftHalf: false);
         left.BeginSequenceSegment();
@@ -856,6 +871,7 @@ public class GameManager : MonoBehaviour
             left.SetSeamRetract(t);
             right.SetSeamRetract(t);
         });
+        PlaySound(SoundCue.PairJoin);
 
         sequenceRoutine = null;
         if(!flow.CompletePresentation(generation)) yield break;
@@ -871,6 +887,7 @@ public class GameManager : MonoBehaviour
         if(!flow.TryContinue()) return;
         continueArmed = false;
         if(presentationView != null) presentationView.Hide();
+        PlaySound(SoundCue.PairReturn);
         sequenceRoutine = StartCoroutine(ReturnMatch(flow.First, flow.Second, flow.Generation));
     }
 
@@ -926,6 +943,7 @@ public class GameManager : MonoBehaviour
 
         if(victoryEffects != null) victoryEffects.Burst(gameplayCamera, BoardDistance() * s.victoryConfettiDepth);
         TriggerWinVibration();
+        PlaySound(SoundCue.Victory);
 
         float elapsed = 0f;
         while(elapsed < duration)

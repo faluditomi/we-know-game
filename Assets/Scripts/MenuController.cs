@@ -104,6 +104,10 @@ public sealed class MenuController : MonoBehaviour
     [SerializeField] private Button pauseSettingsButton;
     [SerializeField] private Button mainMenuButton;
 
+    [Header("Sound")]
+    [Tooltip("Sound effects for buttons, toggles, sliders and the picker. Falls back to the first one in the scene; without one the menus are silent.")]
+    [SerializeField] private SoundEffects soundEffects;
+
     [Header("Style")]
     [SerializeField] private MenuStyle style = new MenuStyle();
 
@@ -132,6 +136,8 @@ public sealed class MenuController : MonoBehaviour
 
         settings = new GameSettings(new PlayerPrefsSettingsStorage(), gameManager == null || gameManager.VibrationDefault);
         if(gameManager != null) gameManager.UseSettings(settings);
+        if(soundEffects == null) soundEffects = FindFirstObjectByType<SoundEffects>();
+        if(soundEffects != null) soundEffects.UseSettings(settings);
         inactivity = new InactivityTimer(settings.InactivityTimeoutSeconds);
         settings.Changed += () => inactivity.TimeoutSeconds = settings.InactivityTimeoutSeconds;
         settings.Changed += OnSettingsChanged;
@@ -151,7 +157,11 @@ public sealed class MenuController : MonoBehaviour
         Bind(pauseSettingsButton, OnOpenSettings);
         Bind(mainMenuButton, OnMainMenu);
 
-        if(picker != null) picker.SelectionConfirmed += OnBoardSelected;
+        if(picker != null)
+        {
+            picker.SelectionConfirmed += OnBoardSelected;
+            picker.SelectionChanged += () => PlaySound(SoundCue.PickerCell);
+        }
         BindSettingsControls();
 
         if(settingsPanel != null)
@@ -282,6 +292,7 @@ public sealed class MenuController : MonoBehaviour
         successRemaining = successTitleDuration;
         if(background != null) background.Celebrate(successTitleDuration);
         Refresh();
+        PlaySound(SoundCue.SuccessTitle);
         titleEntranceElapsed = 0f;
         AnimateTitleEntrance(0f);
     }
@@ -290,22 +301,30 @@ public sealed class MenuController : MonoBehaviour
 
     private void OnPlay()
     {
-        if(flow.OpenPicker()) Refresh();
+        if(!flow.OpenPicker()) return;
+        PlaySound(SoundCue.ButtonClick);
+        Refresh();
     }
 
     private void OnOpenSettings()
     {
-        if(flow.OpenSettings()) Refresh();
+        if(!flow.OpenSettings()) return;
+        PlaySound(SoundCue.ButtonClick);
+        Refresh();
     }
 
     private void OnSettingsBack()
     {
-        if(flow.CloseSettings()) Refresh();
+        if(!flow.CloseSettings()) return;
+        PlaySound(SoundCue.ButtonBack);
+        Refresh();
     }
 
     private void OnPickerBack()
     {
-        if(flow.ClosePicker()) Refresh();
+        if(!flow.ClosePicker()) return;
+        PlaySound(SoundCue.ButtonBack);
+        Refresh();
     }
 
     private void OnBoardSelected(int columns, int rows)
@@ -313,6 +332,7 @@ public sealed class MenuController : MonoBehaviour
         if(flow.State != MenuState.Picker || gameManager == null) return;
         if(!gameManager.StartGame(columns, rows)) return;
         flow.StartGame();
+        PlaySound(SoundCue.BoardStart);
         inactivity.Reset();
         Refresh();
     }
@@ -370,6 +390,7 @@ public sealed class MenuController : MonoBehaviour
     private void OnPause()
     {
         if(!flow.Pause()) return;
+        PlaySound(SoundCue.Pause);
         gameManager.SetPaused(true);
         Refresh();
     }
@@ -377,6 +398,7 @@ public sealed class MenuController : MonoBehaviour
     private void OnContinue()
     {
         if(!flow.Resume()) return;
+        PlaySound(SoundCue.Resume);
         gameManager.SetPaused(false);
         Refresh();
     }
@@ -384,6 +406,7 @@ public sealed class MenuController : MonoBehaviour
     private void OnMainMenu()
     {
         if(!flow.Abandon()) return;
+        PlaySound(SoundCue.ButtonBack);
         if(completionRoutine != null) StopCoroutine(completionRoutine);
         completionRoutine = null;
         gameManager.AbandonGame();
@@ -418,13 +441,21 @@ public sealed class MenuController : MonoBehaviour
         if(vibrationToggle != null)
         {
             vibrationToggle.SetIsOnWithoutNotify(settings.Vibration);
-            vibrationToggle.onValueChanged.AddListener(value => settings.Vibration = value);
+            vibrationToggle.onValueChanged.AddListener(value =>
+            {
+                settings.Vibration = value;
+                PlaySound(SoundCue.Toggle);
+            });
         }
 
         if(batterySaverToggle != null)
         {
             batterySaverToggle.SetIsOnWithoutNotify(settings.BatterySaver);
-            batterySaverToggle.onValueChanged.AddListener(value => settings.BatterySaver = value);
+            batterySaverToggle.onValueChanged.AddListener(value =>
+            {
+                settings.BatterySaver = value;
+                PlaySound(SoundCue.Toggle);
+            });
         }
 
         if(soundSlider != null)
@@ -432,7 +463,12 @@ public sealed class MenuController : MonoBehaviour
             soundSlider.minValue = 0f;
             soundSlider.maxValue = 1f;
             soundSlider.SetValueWithoutNotify(settings.SoundVolume);
-            soundSlider.onValueChanged.AddListener(value => settings.SoundVolume = value);
+            // The tick plays at the new volume, so dragging previews how loud the game will be.
+            soundSlider.onValueChanged.AddListener(value =>
+            {
+                settings.SoundVolume = value;
+                PlaySound(SoundCue.SliderTick);
+            });
         }
 
         if(musicSlider != null)
@@ -440,7 +476,11 @@ public sealed class MenuController : MonoBehaviour
             musicSlider.minValue = 0f;
             musicSlider.maxValue = 1f;
             musicSlider.SetValueWithoutNotify(settings.MusicVolume);
-            musicSlider.onValueChanged.AddListener(value => settings.MusicVolume = value);
+            musicSlider.onValueChanged.AddListener(value =>
+            {
+                settings.MusicVolume = value;
+                PlaySound(SoundCue.SliderTick);
+            });
         }
 
         if(inactivitySlider != null)
@@ -454,6 +494,7 @@ public sealed class MenuController : MonoBehaviour
             {
                 settings.InactivityTimeoutSeconds = Mathf.RoundToInt(value) * step;
                 RefreshInactivityLabel();
+                PlaySound(SoundCue.SliderTick);
             });
         }
         RefreshInactivityLabel();
@@ -468,6 +509,7 @@ public sealed class MenuController : MonoBehaviour
             languageDropdown.onValueChanged.AddListener(index =>
             {
                 if(index >= 0 && index < GameLanguages.All.Length) settings.Language = GameLanguages.All[index];
+                PlaySound(SoundCue.DropdownSelect);
             });
         }
     }
@@ -688,6 +730,11 @@ public sealed class MenuController : MonoBehaviour
         safeAreaRoot.anchorMax = new Vector2(safe.xMax / size.x, safe.yMax / size.y);
         safeAreaRoot.offsetMin = Vector2.zero;
         safeAreaRoot.offsetMax = Vector2.zero;
+    }
+
+    private void PlaySound(SoundCue cue)
+    {
+        if(soundEffects != null) soundEffects.Play(cue);
     }
 
     private static void Bind(Button button, UnityEngine.Events.UnityAction action)
