@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: we_knox_tile
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   tileName: We.Knox
-  foundDescription: this is We.Knox
-  foundDescriptionHungarian: ez a We.Knox
+  foundDescription: "<b>We.Knox</b>\nAI-based digital risk management: detects phishing and malicious domains, monitors leaked credentials and protects your brand, 24/7."
+  foundDescriptionHungarian: "<b>We.Knox</b>\nAI-alapú digitális kockázatkezelés: kiszűri az adathalász és kártékony domaineket, figyeli a kiszivárgott belépési adatokat és védi a márkát, 24/7."
   backLogo: {fileID: 21300000, guid: 09b13118be1c9f54482e047acd05cfa1, type: 3}
   tileColour: {r: 0.16470589, g: 0.19215687, b: 1, a: 1}
