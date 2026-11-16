@@ -86,10 +86,11 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private Vector3 sequenceStartPosition;
     private Vector3 sequenceStartScale;
     private float sequenceStartAngle;
+    private GameLanguage language;
 
     public Tile Data => tile;
     public object MatchIdentity => tile;
-    public string Description => tile != null ? tile.foundDescription : string.Empty;
+    public string Description => tile != null ? tile.GetDescription(language) : string.Empty;
     public bool IsRevealed { get; private set; }
     public bool IsMatched { get; private set; }
     public bool IsAnimating { get; set; }
@@ -104,10 +105,20 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         ResolveReferences();
     }
 
-    public void Setup(Tile tileData)
+    /// <summary>Rewrites the description in <paramref name="displayLanguage"/>, e.g. after the language changed mid-game.</summary>
+    public void SetLanguage(GameLanguage displayLanguage)
+    {
+        if(language == displayLanguage) return;
+        language = displayLanguage;
+        if(tile != null && descriptionText != null) descriptionText.text = tile.GetDescription(language);
+    }
+
+    /// <summary>Shows <paramref name="tileData"/>; its description is shown in <paramref name="displayLanguage"/>.</summary>
+    public void Setup(Tile tileData, GameLanguage displayLanguage = GameLanguage.English)
     {
         ResolveReferences();
         tile = tileData;
+        language = displayLanguage;
         transform.name = tileData.tileName;
         IsMatched = false;
         IsRevealed = false;
@@ -125,7 +136,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
 
         ApplyScreenHue(tileData.tileColour);
 
-        if(descriptionText != null) descriptionText.text = tileData.foundDescription;
+        if(descriptionText != null) descriptionText.text = tileData.GetDescription(language);
 
         ApplyTint(0f, Color.white);
         SetPresentationFace(false);

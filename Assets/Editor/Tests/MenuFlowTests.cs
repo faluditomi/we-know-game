@@ -113,6 +113,54 @@ public class MenuFlowTests
     }
 
     [Test]
+    public void SettingsFromPauseReturnToPause()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        Assert.IsFalse(flow.OpenSettings(), "settings cannot open over a running board");
+        flow.Pause();
+        Assert.IsTrue(flow.OpenSettings());
+        Assert.AreEqual(MenuState.Settings, flow.State);
+        Assert.IsTrue(flow.IsInGame);
+        Assert.IsFalse(flow.Resume());
+        Assert.IsFalse(flow.Abandon());
+        Assert.IsTrue(flow.CloseSettings());
+        Assert.AreEqual(MenuState.Paused, flow.State);
+        Assert.IsTrue(flow.Resume());
+    }
+
+    [Test]
+    public void SettingsFromTitleStillReturnToTitleAfterAPauseRoute()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.Pause();
+        flow.OpenSettings();
+        flow.CloseSettings();
+        flow.Abandon();
+        Assert.IsTrue(flow.OpenSettings());
+        Assert.IsFalse(flow.IsInGame);
+        Assert.IsTrue(flow.CloseSettings());
+        Assert.AreEqual(MenuState.Title, flow.State);
+    }
+
+    [Test]
+    public void TimeOutFromPauseSettingsShowsTheTitle()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.Pause();
+        flow.OpenSettings();
+        Assert.IsTrue(flow.TimeOut());
+        Assert.AreEqual(MenuState.Title, flow.State);
+        Assert.IsFalse(flow.IsInGame);
+        Assert.IsFalse(flow.ShowSuccessTitle);
+    }
+
+    [Test]
     public void TimeOutDoesNothingOnMenuScreens()
     {
         MenuFlow flow = ReadyFlow();

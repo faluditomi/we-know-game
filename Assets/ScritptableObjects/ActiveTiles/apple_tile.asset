@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   tileName: Apple
   foundDescription: this an apple
+  foundDescriptionHungarian: ez egy alma
   backLogo: {fileID: 21300000, guid: 27f50385c118a02429f9c2b7fac6d691, type: 3}
   tileColour: {r: 1, g: 0.43137252, b: 0.45507255, a: 1}

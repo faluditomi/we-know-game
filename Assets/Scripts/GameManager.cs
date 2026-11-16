@@ -140,8 +140,22 @@ public class GameManager : MonoBehaviour
     /// <summary>Fresh-install default for the vibration setting.</summary>
     public bool BlockedInputHapticsDefault => blockedInputHaptics;
 
-    /// <summary>Uses the player's settings (vibration) instead of the serialized defaults.</summary>
-    public void UseSettings(GameSettings gameSettings) => settings = gameSettings;
+    /// <summary>Uses the player's settings (vibration, tile description language) instead of the serialized defaults.</summary>
+    public void UseSettings(GameSettings gameSettings)
+    {
+        if(settings != null) settings.Changed -= OnSettingsChanged;
+        settings = gameSettings;
+        if(settings != null) settings.Changed += OnSettingsChanged;
+    }
+
+    /// <summary>Settings can be opened from the pause menu, so the language may change with a board on screen.</summary>
+    private void OnSettingsChanged()
+    {
+        foreach(TileController tile in boardTiles)
+        {
+            if(tile != null) tile.SetLanguage(settings.Language);
+        }
+    }
 
     // ---- Lifecycle -------------------------------------------------------------------------
 
@@ -450,7 +464,7 @@ public class GameManager : MonoBehaviour
                     return;
                 }
 
-                tileController.Setup(tileVariationStack.Pop());
+                tileController.Setup(tileVariationStack.Pop(), settings != null ? settings.Language : GameLanguage.English);
                 tileView.SetSize(tileWidth, tileHeight);
                 tileController.CaptureBoardPose();
                 boardTiles.Add(tileController);

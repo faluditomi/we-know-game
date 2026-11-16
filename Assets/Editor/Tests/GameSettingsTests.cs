@@ -85,6 +85,52 @@ public class GameSettingsTests
     }
 
     [Test]
+    public void LanguageDefaultsToEnglish()
+    {
+        Assert.AreEqual(GameLanguage.English, new GameSettings(new MemoryStorage()).Language);
+    }
+
+    [Test]
+    public void LanguageRoundTripsThroughStorage()
+    {
+        MemoryStorage storage = new MemoryStorage();
+        new GameSettings(storage).Language = GameLanguage.Hungarian;
+        Assert.AreEqual(GameLanguage.Hungarian, new GameSettings(storage).Language);
+        Assert.AreEqual(1, storage.Saves);
+    }
+
+    [TestCase(-1)]
+    [TestCase(2)]
+    [TestCase(99)]
+    public void UnknownStoredLanguageReadsAsEnglish(int stored)
+    {
+        MemoryStorage storage = new MemoryStorage();
+        storage.Values[GameSettings.LanguageKey] = stored;
+        Assert.AreEqual(GameLanguage.English, new GameSettings(storage).Language);
+    }
+
+    [Test]
+    public void SettingAnUnknownLanguageStoresEnglish()
+    {
+        GameSettings settings = new GameSettings(new MemoryStorage());
+        settings.Language = GameLanguage.Hungarian;
+        settings.Language = (GameLanguage)42;
+        Assert.AreEqual(GameLanguage.English, settings.Language);
+    }
+
+    [Test]
+    public void LanguageRaisesTheEventOnlyWhenItChanges()
+    {
+        GameSettings settings = new GameSettings(new MemoryStorage());
+        int raised = 0;
+        settings.Changed += () => raised++;
+        settings.Language = GameLanguage.English;   // unchanged default
+        settings.Language = GameLanguage.Hungarian;
+        settings.Language = GameLanguage.Hungarian; // unchanged
+        Assert.AreEqual(1, raised);
+    }
+
+    [Test]
     public void ChangesRaiseTheEventOnlyWhenValuesChange()
     {
         GameSettings settings = new GameSettings(new MemoryStorage());

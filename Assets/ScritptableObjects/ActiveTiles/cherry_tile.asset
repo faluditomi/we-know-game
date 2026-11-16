@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Tile
   tileName: Cherry
   foundDescription: this a cherry
+  foundDescriptionHungarian: ez egy cseresznye
   backLogo: {fileID: 21300000, guid: 6e94ddad72f832c4380a3f961194137b, type: 3}
   tileColour: {r: 1, g: 0.34509802, b: 0.57832086, a: 1}

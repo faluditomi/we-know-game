@@ -42,16 +42,19 @@ public static class BoardSelection
         return BoardSelectionResult.Valid;
     }
 
-    /// <summary>Short player-facing explanation for a selection result.</summary>
+    /// <summary>
+    /// <see cref="LocalizedText"/> key of the player-facing explanation for a selection result,
+    /// or an empty string for <see cref="BoardSelectionResult.Valid"/>.
+    /// </summary>
     public static string Describe(BoardSelectionResult result)
     {
         switch(result)
         {
             case BoardSelectionResult.Valid: return string.Empty;
-            case BoardSelectionResult.TooSmall: return "Too small: pick at least 4 tiles";
-            case BoardSelectionResult.OddCount: return "Pick an even number of tiles";
-            case BoardSelectionResult.TooManyPairs: return "Not enough tile designs for that many pairs";
-            default: return "Pick a board inside the grid";
+            case BoardSelectionResult.TooSmall: return LocalizedText.TooSmall;
+            case BoardSelectionResult.OddCount: return LocalizedText.OddCount;
+            case BoardSelectionResult.TooManyPairs: return LocalizedText.TooManyPairs;
+            default: return LocalizedText.OutOfGrid;
         }
     }
 }

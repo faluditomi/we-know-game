@@ -18,7 +18,6 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
     [SerializeField] private TMP_Text messageText;
     [Tooltip("Gap between cells as a fraction of the cell size.")]
     [Range(0f, 0.5f)] [SerializeField] private float cellGap = 0.12f;
-    [SerializeField] private string hint = "Drag across the grid to choose your board";
 
     private Color validColor = new Color32(0x12, 0x85, 0x80, 0xFF);
     private Color invalidColor = new Color(0.75f, 0.27f, 0.27f, 1f);
@@ -33,6 +32,7 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
     private Vector2Int startCell;
     private Vector2Int currentCell;
     private bool showingSelection;
+    private GameLanguage language = GameLanguage.English;
 
     /// <summary>Raised with (columns, rows) when the player releases a valid selection.</summary>
     public event Action<int, int> SelectionConfirmed;
@@ -88,12 +88,20 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
         RefreshCells();
     }
 
+    /// <summary>Shows the hint, size readout and rejection reasons in <paramref name="newLanguage"/>, re-rendering the current message.</summary>
+    public void SetLanguage(GameLanguage newLanguage)
+    {
+        language = newLanguage;
+        if(showingSelection) RefreshSelection();
+        else ShowHint();
+    }
+
     public void ResetSelection()
     {
         dragging = false;
         showingSelection = false;
         RefreshCells();
-        SetMessage(hint, false);
+        ShowHint();
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -128,7 +136,7 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
         {
             showingSelection = false;
             RefreshCells();
-            SetMessage(hint, false);
+            ShowHint();
             SelectionConfirmed?.Invoke(columns, rows);
             return;
         }
@@ -143,8 +151,12 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
         BoardSelectionResult result = BoardSelection.Validate(columns, rows, designCount);
         bool valid = result == BoardSelectionResult.Valid;
         RefreshCells();
-        SetMessage(valid ? $"{columns} × {rows}  ·  {columns * rows / 2} pairs" : BoardSelection.Describe(result), !valid);
+        SetMessage(valid
+            ? LocalizedText.Format(language, LocalizedText.PickerSize, columns, rows, columns * rows / 2)
+            : LocalizedText.Get(language, BoardSelection.Describe(result)), !valid);
     }
+
+    private void ShowHint() => SetMessage(LocalizedText.Get(language, LocalizedText.PickerHint), false);
 
     private void RefreshCells()
     {

@@ -24,7 +24,11 @@ public sealed class MenuFlow
     /// <summary>True while the title should read the success variant after a completed game.</summary>
     public bool ShowSuccessTitle { get; private set; }
 
-    public bool IsInGame => State == MenuState.Playing || State == MenuState.Paused;
+    /// <summary>True during a game, including the settings screen opened from the pause menu.</summary>
+    public bool IsInGame => State == MenuState.Playing || State == MenuState.Paused || (State == MenuState.Settings && settingsReturn == MenuState.Paused);
+
+    /// <summary>Screen the settings screen returns to: the title or the pause menu.</summary>
+    private MenuState settingsReturn = MenuState.Title;
 
     public bool FinishLoading(bool gameAvailable)
     {
@@ -34,8 +38,16 @@ public sealed class MenuFlow
         return true;
     }
 
-    public bool OpenSettings() => Move(MenuState.Title, MenuState.Settings);
-    public bool CloseSettings() => Move(MenuState.Settings, MenuState.Title);
+    /// <summary>Opens settings from the title or the pause menu; <see cref="CloseSettings"/> returns there.</summary>
+    public bool OpenSettings()
+    {
+        if(State != MenuState.Title && State != MenuState.Paused) return false;
+        settingsReturn = State;
+        State = MenuState.Settings;
+        return true;
+    }
+
+    public bool CloseSettings() => Move(MenuState.Settings, settingsReturn);
 
     public bool OpenPicker()
     {

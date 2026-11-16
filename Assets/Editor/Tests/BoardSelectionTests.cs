@@ -54,13 +54,20 @@ public class BoardSelectionTests
     }
 
     [Test]
-    public void EveryInvalidResultHasAMessage()
+    public void EveryInvalidResultHasATranslatedMessage()
     {
         foreach(BoardSelectionResult result in System.Enum.GetValues(typeof(BoardSelectionResult)))
         {
-            string message = BoardSelection.Describe(result);
-            if(result == BoardSelectionResult.Valid) Assert.IsEmpty(message);
-            else Assert.IsNotEmpty(message);
+            string key = BoardSelection.Describe(result);
+            if(result == BoardSelectionResult.Valid)
+            {
+                Assert.IsEmpty(key);
+                continue;
+            }
+
+            CollectionAssert.Contains(LocalizedText.AllKeys, key, result.ToString());
+            Assert.IsTrue(LocalizedText.HasTranslation(GameLanguage.English, key), $"{result} has no English text");
+            Assert.IsTrue(LocalizedText.HasTranslation(GameLanguage.Hungarian, key), $"{result} has no Hungarian text");
         }
     }
 

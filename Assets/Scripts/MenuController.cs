@@ -39,6 +39,8 @@ public sealed class MenuController : MonoBehaviour
     [SerializeField] private GameObject titleScreen;
     [SerializeField] private GameObject pickerScreen;
     [SerializeField] private GameObject settingsScreen;
+    [Tooltip("Settings panel. Keeps its scene position when opened from the title; centred when opened from the pause menu.")]
+    [SerializeField] private RectTransform settingsPanel;
     [SerializeField] private GameObject pauseScreen;
     [Tooltip("In-game controls (the pause button).")]
     [SerializeField] private GameObject gameHud;
@@ -72,6 +74,8 @@ public sealed class MenuController : MonoBehaviour
     [Tooltip("Inactivity timeout slider. Whole-number steps; each step is 5 seconds (3 = 15 s … 60 = 300 s).")]
     [SerializeField] private Slider inactivitySlider;
     [SerializeField] private TMP_Text inactivityValueText;
+    [Tooltip("Language dropdown. Its options are filled from the supported languages at startup.")]
+    [SerializeField] private TMP_Dropdown languageDropdown;
     [SerializeField] private Button settingsBackButton;
 
     [Header("Inactivity")]
@@ -81,6 +85,8 @@ public sealed class MenuController : MonoBehaviour
     [Header("Pause")]
     [SerializeField] private Button pauseButton;
     [SerializeField] private Button continueButton;
+    [Tooltip("Opens the settings screen from the pause menu; its back action returns to the pause menu.")]
+    [SerializeField] private Button pauseSettingsButton;
     [SerializeField] private Button mainMenuButton;
 
     [Header("Style")]
@@ -95,6 +101,10 @@ public sealed class MenuController : MonoBehaviour
     private Coroutine completionRoutine;
     private Rect appliedSafeArea;
     private Vector2Int appliedScreenSize;
+    private LocalizedLabel[] localizedLabels = Array.Empty<LocalizedLabel>();
+    private GameLanguage appliedLanguage;
+    private string statusKey;
+    private Vector2 settingsAnchorMin, settingsAnchorMax, settingsPivot, settingsPosition;
 
     public MenuState State => flow.State;
     public GameSettings Settings => settings;
@@ -107,6 +117,10 @@ public sealed class MenuController : MonoBehaviour
         if(gameManager != null) gameManager.UseSettings(settings);
         inactivity = new InactivityTimer(settings.InactivityTimeoutSeconds);
         settings.Changed += () => inactivity.TimeoutSeconds = settings.InactivityTimeoutSeconds;
+        settings.Changed += OnSettingsChanged;
+
+        // Includes labels on inactive screens and outside this hierarchy (e.g. the match presentation prompt).
+        localizedLabels = FindObjectsByType<LocalizedLabel>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 
         Bind(playButton, OnPlay);
         Bind(settingsButton, OnOpenSettings);
@@ -115,16 +129,26 @@ public sealed class MenuController : MonoBehaviour
         Bind(settingsBackButton, OnSettingsBack);
         Bind(pauseButton, OnPause);
         Bind(continueButton, OnContinue);
+        Bind(pauseSettingsButton, OnOpenSettings);
         Bind(mainMenuButton, OnMainMenu);
 
         if(picker != null) picker.SelectionConfirmed += OnBoardSelected;
         BindSettingsControls();
+
+        if(settingsPanel != null)
+        {
+            settingsAnchorMin = settingsPanel.anchorMin;
+            settingsAnchorMax = settingsPanel.anchorMax;
+            settingsPivot = settingsPanel.pivot;
+            settingsPosition = settingsPanel.anchoredPosition;
+        }
 
 #if UNITY_IOS && !UNITY_EDITOR
         if(exitButton != null) exitButton.gameObject.SetActive(false);
 #endif
 
         ApplyStyle();
+        ApplyLanguage();
         Refresh();
     }
 
@@ -194,7 +218,7 @@ public sealed class MenuController : MonoBehaviour
         if(!flow.FinishLoading(true)) return;
         if(picker != null) picker.Build(gameManager.MaxBoardSize, gameManager.DesignCount);
         if(background != null) background.Build(gameManager.TilePrefab, gameManager.TileVariations);
-        SetStatus(string.Empty);
+        SetStatus(null);
         Refresh();
     }
 
@@ -202,7 +226,7 @@ public sealed class MenuController : MonoBehaviour
     {
         if(!flow.FinishLoading(false)) return;
         if(playButton != null) playButton.interactable = false;
-        SetStatus("The game could not be loaded.");
+        SetStatus(LocalizedText.LoadFailed);
         Refresh();
     }
 
@@ -397,11 +421,47 @@ public sealed class MenuController : MonoBehaviour
             });
         }
         RefreshInactivityLabel();
+
+        if(languageDropdown != null)
+        {
+            languageDropdown.ClearOptions();
+            var options = new System.Collections.Generic.List<string>();
+            foreach(GameLanguage language in GameLanguages.All) options.Add(GameLanguages.NativeName(language));
+            languageDropdown.AddOptions(options);
+            languageDropdown.SetValueWithoutNotify(Array.IndexOf(GameLanguages.All, settings.Language));
+            languageDropdown.onValueChanged.AddListener(index =>
+            {
+                if(index >= 0 && index < GameLanguages.All.Length) settings.Language = GameLanguages.All[index];
+            });
+        }
     }
 
     private void RefreshInactivityLabel()
     {
-        if(inactivityValueText != null) inactivityValueText.text = $"{settings.InactivityTimeoutSeconds} s";
+        if(inactivityValueText != null)
+            inactivityValueText.text = LocalizedText.Format(settings.Language, LocalizedText.SecondsValue, settings.InactivityTimeoutSeconds);
+    }
+
+    // ---- Language ----------------------------------------------------------------------------
+
+    private void OnSettingsChanged()
+    {
+        if(settings.Language != appliedLanguage) ApplyLanguage();
+    }
+
+    /// <summary>Shows every localized label, the picker messages and code-driven texts in the current language. The title stays English.</summary>
+    private void ApplyLanguage()
+    {
+        appliedLanguage = settings.Language;
+        foreach(LocalizedLabel label in localizedLabels)
+        {
+            if(label != null) label.Apply(appliedLanguage);
+        }
+
+        if(picker != null) picker.SetLanguage(appliedLanguage);
+        if(languageDropdown != null) languageDropdown.SetValueWithoutNotify(Array.IndexOf(GameLanguages.All, appliedLanguage));
+        RefreshInactivityLabel();
+        RefreshStatus();
     }
 
     // ---- Presentation ------------------------------------------------------------------------
@@ -415,6 +475,7 @@ public sealed class MenuController : MonoBehaviour
         SetActive(titleScreen, state == MenuState.Title || state == MenuState.Loading);
         SetActive(pickerScreen, state == MenuState.Picker);
         SetActive(settingsScreen, state == MenuState.Settings);
+        if(state == MenuState.Settings) PlaceSettingsPanel(flow.IsInGame);
         SetActive(pauseScreen, state == MenuState.Paused);
         SetActive(gameHud, state == MenuState.Playing);
 
@@ -422,6 +483,17 @@ public sealed class MenuController : MonoBehaviour
         if(picker != null && state == MenuState.Picker) picker.ResetSelection();
         if(background != null) background.SetVisible(inMenu);
         RefreshTitle();
+    }
+
+    /// <summary>Centres the settings panel over a paused game; otherwise restores its scene position beside the title.</summary>
+    private void PlaceSettingsPanel(bool centred)
+    {
+        if(settingsPanel == null) return;
+        Vector2 centre = new Vector2(0.5f, 0.5f);
+        settingsPanel.anchorMin = centred ? centre : settingsAnchorMin;
+        settingsPanel.anchorMax = centred ? centre : settingsAnchorMax;
+        settingsPanel.pivot = centred ? centre : settingsPivot;
+        settingsPanel.anchoredPosition = centred ? Vector2.zero : settingsPosition;
     }
 
     private void RefreshTitle()
@@ -443,11 +515,19 @@ public sealed class MenuController : MonoBehaviour
         }
     }
 
-    private void SetStatus(string message)
+    /// <summary>Shows the <see cref="LocalizedText"/> entry <paramref name="key"/> as the status line, or hides it when null.</summary>
+    private void SetStatus(string key)
+    {
+        statusKey = key;
+        RefreshStatus();
+    }
+
+    private void RefreshStatus()
     {
         if(statusText == null) return;
-        statusText.text = message;
-        statusText.gameObject.SetActive(!string.IsNullOrEmpty(message));
+        bool visible = !string.IsNullOrEmpty(statusKey);
+        statusText.text = visible ? LocalizedText.Get(settings.Language, statusKey) : string.Empty;
+        statusText.gameObject.SetActive(visible);
     }
 
     /// <summary>Applies the accent colour and font to every control under this menu.</summary>

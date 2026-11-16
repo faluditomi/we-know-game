@@ -33,6 +33,7 @@ public sealed class GameSettings
     public const string SoundVolumeKey = "settings.soundVolume";
     public const string MusicVolumeKey = "settings.musicVolume";
     public const string InactivityTimeoutKey = "settings.inactivityTimeout";
+    public const string LanguageKey = "settings.language";
 
     public const int DefaultInactivityTimeoutSeconds = 60;
     public const int MinInactivityTimeoutSeconds = 15;
@@ -44,6 +45,7 @@ public sealed class GameSettings
     private float soundVolume;
     private float musicVolume;
     private int inactivityTimeoutSeconds;
+    private GameLanguage language;
 
     /// <summary>Raised after any setting changes.</summary>
     public event Action Changed;
@@ -55,6 +57,22 @@ public sealed class GameSettings
         soundVolume = Clamp01(storage.GetFloat(SoundVolumeKey, defaultSoundVolume));
         musicVolume = Clamp01(storage.GetFloat(MusicVolumeKey, defaultMusicVolume));
         inactivityTimeoutSeconds = ClampTimeout(storage.GetInt(InactivityTimeoutKey, DefaultInactivityTimeoutSeconds));
+        int storedLanguage = storage.GetInt(LanguageKey, (int)GameLanguage.English);
+        language = GameLanguages.IsDefined(storedLanguage) ? (GameLanguage)storedLanguage : GameLanguage.English;
+    }
+
+    /// <summary>Display language. English on first launch; unknown stored values read as English.</summary>
+    public GameLanguage Language
+    {
+        get => language;
+        set
+        {
+            GameLanguage sanitised = GameLanguages.IsDefined((int)value) ? value : GameLanguage.English;
+            if(language == sanitised) return;
+            language = sanitised;
+            storage.SetInt(LanguageKey, (int)sanitised);
+            Commit();
+        }
     }
 
     /// <summary>
