@@ -123,3 +123,6 @@ __pycache__/
 
 # Git LFS: don't ignore large binary assets managed by LFS
 # (Make sure to set patterns in .gitattributes instead)
+
+# Unity build temp folder
+/.utmp/
