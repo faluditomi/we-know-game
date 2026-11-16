@@ -63,11 +63,18 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool blockedInputHaptics = true;
     [Min(0.1f)] [SerializeField] private float blockedFeedbackCooldown = 1f;
 
+    [Header("Victory")]
+    [Tooltip("Confetti for the victory moment. Optional: without it the moment plays without confetti.")]
+    [SerializeField] private VictoryEffects victoryEffects;
+
     [Header("Events")]
     [SerializeField] private UnityEvent onBoardCompleted = new UnityEvent();
 
     /// <summary>Raised exactly once per board, after the final pair returns.</summary>
     public event Action BoardCompleted;
+
+    /// <summary>Raised when the victory moment on a completed board has finished. Not raised when it is cut short.</summary>
+    public event Action VictoryFinished;
 
     /// <summary>Raised once when the tile prefab and tile data finished loading successfully.</summary>
     public event Action SetupSucceeded;
@@ -105,6 +112,15 @@ public class GameManager : MonoBehaviour
 
     private Coroutine revealRoutine;
     private Coroutine sequenceRoutine;
+    private Coroutine victoryRoutine;
+
+    private static readonly int VictorySurgeId = Shader.PropertyToID("_VictorySurge");
+    private float playSeconds;
+    private RoundStats lastRoundStats;
+    private bool hasRoundStats;
+    private bool victoryCameraCaptured;
+    private float victoryBaseFieldOfView;
+    private float victoryBaseOrthographicSize;
 
     private Vector2Int framedScreenSize;
     private Rect framedSafeArea;
@@ -124,6 +140,16 @@ public class GameManager : MonoBehaviour
     public bool HasActiveBoard => boardTiles.Count > 0;
 
     public bool IsPaused => isPaused;
+
+    /// <summary>True while the victory moment plays on a completed board.</summary>
+    public bool IsVictoryPlaying => victoryRoutine != null;
+
+    /// <summary>Statistics of the last completed board. False until a board is completed; reset when a new game starts.</summary>
+    public bool TryGetLastRoundStats(out RoundStats stats)
+    {
+        stats = lastRoundStats;
+        return hasRoundStats;
+    }
 
     /// <summary>Number of distinct tile designs available for pairs.</summary>
     public int DesignCount => tileVariations != null ? tileVariations.Count : 0;
@@ -198,6 +224,7 @@ public class GameManager : MonoBehaviour
     private void OnDestroy()
     {
         isDestroyed = true;
+        Shader.SetGlobalFloat(VictorySurgeId, 0f);
 
         if(ownsInputActions)
         {
@@ -226,6 +253,12 @@ public class GameManager : MonoBehaviour
     {
         if(isPaused) return;
 
+        // Play time for the round statistics: only while a board is being played, never while paused.
+        if(boardTiles.Count > 0 && flow.State != MatchFlowState.Complete && flow.State != MatchFlowState.Loading && flow.State != MatchFlowState.Failed)
+        {
+            playSeconds += Time.unscaledDeltaTime;
+        }
+
         // A new board only accepts taps once the gesture that started it (and any other contact) has lifted.
         if(!boardInputArmed && boardTiles.Count > 0 && !AnyPointerHeld())
         {
@@ -245,8 +278,8 @@ public class GameManager : MonoBehaviour
         Vector2Int size = new Vector2Int(Screen.width, Screen.height);
         if(size != framedScreenSize || Screen.safeArea != framedSafeArea) framingDirty = true;
 
-        // Keep the camera static while a pair is being resolved or presented.
-        if(framingDirty && (flow.AcceptsSelection || flow.State == MatchFlowState.Complete))
+        // Keep the camera static while a pair is being resolved or presented, and during the victory punch.
+        if(framingDirty && !IsVictoryPlaying && (flow.AcceptsSelection || flow.State == MatchFlowState.Complete))
         {
             FrameBoard();
         }
@@ -360,6 +393,7 @@ public class GameManager : MonoBehaviour
         }
 
         isPaused = false;
+        hasRoundStats = false;
         GenerateMemoryGrid(columns, rows);
         boardInputArmed = false;
         gesture = default;
@@ -375,6 +409,7 @@ public class GameManager : MonoBehaviour
         if(isPaused == paused) return;
         isPaused = paused;
         gesture = default;
+        if(victoryEffects != null) victoryEffects.SetPaused(paused);
 
         if(paused)
         {
@@ -394,6 +429,7 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public void AbandonGame()
     {
+        StopVictory();
         CancelActiveSequence(confirmPendingMatch: false, raiseCompletion: false);
         ClearBoard();
         isPaused = false;
@@ -436,6 +472,7 @@ public class GameManager : MonoBehaviour
         Stack<Tile> tileVariationStack = selectedTiles.ToShuffledStack();
 
         // Stop anything running on the old board before its tiles are destroyed.
+        StopVictory();
         CancelActiveSequence(confirmPendingMatch: false, raiseCompletion: false);
         flow.ResetToLoading();
         ClearBoard();
@@ -475,6 +512,7 @@ public class GameManager : MonoBehaviour
         boardRows = rows;
         FrameBoard();
         flow.StartBoard(pairCount);
+        playSeconds = 0f;
     }
 
     private void ClearBoard()
@@ -863,8 +901,101 @@ public class GameManager : MonoBehaviour
 
         if(flow.CompleteMatchReturn(generation, out bool boardCompleted) && boardCompleted)
         {
+            lastRoundStats = new RoundStats(flow.PairCount, playSeconds, flow.Misses);
+            hasRoundStats = true;
+            // Start the victory before announcing completion, so listeners already see IsVictoryPlaying.
+            Vector3 origin = (first.transform.position + second.transform.position) * 0.5f;
+            if(isActiveAndEnabled && boardTiles.Count > 0) victoryRoutine = StartCoroutine(PlayVictory(origin));
             RaiseBoardCompleted();
         }
+    }
+
+    // ---- Victory moment --------------------------------------------------------------------
+
+    /// <summary>
+    /// The victory moment on the completed board: a wave of hopping tiles from the last pair outward, a surge
+    /// on every tile screen, a confetti burst, a small camera punch and one vibration. One pause-aware timeline
+    /// drives all of it; <see cref="VictoryFinished"/> is raised when it ends.
+    /// </summary>
+    private IEnumerator PlayVictory(Vector3 origin)
+    {
+        TileAnimationSettings s = animationSettings;
+        List<Vector3> positions = new List<Vector3>(boardTiles.Count);
+        foreach(TileController tile in boardTiles) positions.Add(tile != null ? tile.transform.position : origin);
+        float[] delays = VictoryWave.Delays(positions, origin, s.victoryWaveSpread);
+        float duration = Mathf.Max(s.victoryMinDuration, s.victoryWaveSpread + s.victoryHopDuration);
+        Vector3 lift = -gameplayCamera.transform.forward * TileWorldHeight * s.victoryHopHeight;
+
+        victoryBaseFieldOfView = gameplayCamera.fieldOfView;
+        victoryBaseOrthographicSize = gameplayCamera.orthographicSize;
+        victoryCameraCaptured = true;
+
+        if(victoryEffects != null) victoryEffects.Burst(gameplayCamera, BoardDistance() * s.victoryConfettiDepth);
+        TriggerWinVibration();
+
+        float elapsed = 0f;
+        while(elapsed < duration)
+        {
+            ApplyVictory(elapsed, duration, delays, lift);
+            yield return null;
+            if(!isPaused) elapsed += Time.unscaledDeltaTime;
+        }
+
+        ApplyVictory(duration, duration, delays, lift);
+        foreach(TileController tile in boardTiles) if(tile != null) tile.MarkMatched();
+        ResetVictoryEffects(clearConfetti: false);
+        victoryRoutine = null;
+        VictoryFinished?.Invoke();
+    }
+
+    private void ApplyVictory(float elapsed, float duration, float[] delays, Vector3 lift)
+    {
+        TileAnimationSettings s = animationSettings;
+        for(int i = 0; i < boardTiles.Count && i < delays.Length; i++)
+        {
+            if(boardTiles[i] == null) continue;
+            float t = (elapsed - delays[i]) / s.victoryHopDuration;
+            boardTiles[i].SetVictoryHop(t, lift, s.victoryHopScale);
+        }
+
+        // Surge: quick rise, hold, then ease back to normal well before the moment ends.
+        float rise = Mathf.Clamp01(elapsed / 0.15f);
+        float fall = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(duration * 0.5f, duration * 0.9f, elapsed));
+        Shader.SetGlobalFloat(VictorySurgeId, s.victorySurgeStrength * rise * fall);
+
+        // Punch: zoom in and settle back to exactly the captured framing.
+        float p = Mathf.Clamp01(elapsed / s.victoryPunchDuration);
+        float punch = 1f - s.victoryPunch * Mathf.Sin(Mathf.PI * p);
+        if(gameplayCamera.orthographic) gameplayCamera.orthographicSize = victoryBaseOrthographicSize * punch;
+        else gameplayCamera.fieldOfView = victoryBaseFieldOfView * punch;
+    }
+
+    private void StopVictory()
+    {
+        StopRoutine(ref victoryRoutine);
+        ResetVictoryEffects(clearConfetti: true);
+    }
+
+    /// <summary>Puts the surge, the camera and (optionally) the confetti back to their normal state.</summary>
+    private void ResetVictoryEffects(bool clearConfetti)
+    {
+        Shader.SetGlobalFloat(VictorySurgeId, 0f);
+        if(victoryCameraCaptured && gameplayCamera != null)
+        {
+            gameplayCamera.fieldOfView = victoryBaseFieldOfView;
+            gameplayCamera.orthographicSize = victoryBaseOrthographicSize;
+        }
+        victoryCameraCaptured = false;
+        if(clearConfetti && victoryEffects != null) victoryEffects.Clear();
+    }
+
+    private void TriggerWinVibration()
+    {
+        bool vibrationEnabled = settings != null ? settings.Vibration : blockedInputHaptics;
+        if(!vibrationEnabled) return;
+#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
+        Handheld.Vibrate();
+#endif
     }
 
     /// <summary>

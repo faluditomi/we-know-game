@@ -478,6 +478,26 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         SetFlipAngle(Mathf.LerpUnclamped(startAngle, RevealedAngle, t));
     }
 
+    // ---- Victory wave ----------------------------------------------------------------------
+
+    /// <summary>
+    /// One hop of the victory board wave: at <paramref name="t"/> 0 and 1 the tile is in its matched board
+    /// pose; in between it rises by <paramref name="worldLift"/>, grows by <paramref name="scaleBump"/>
+    /// and turns one full flip.
+    /// </summary>
+    public void SetVictoryHop(float t, Vector3 worldLift, float scaleBump)
+    {
+        if(!poseCaptured) return;
+        t = Mathf.Clamp01(t);
+        float arc = Mathf.Sin(Mathf.PI * t);
+        Transform board = transform.parent;
+        Vector3 boardWorld = board != null ? board.TransformPoint(boardLocalPosition) : boardLocalPosition;
+        transform.position = boardWorld + worldLift * arc;
+        transform.localScale = boardLocalScale * (1f + scaleBump * arc);
+        float spin = t * t * (3f - 2f * t);
+        SetFlipAngle(t >= 1f ? RevealedAngle : RevealedAngle + 360f * spin);
+    }
+
     // ---- Final / reset states --------------------------------------------------------------
 
     /// <summary>Snaps to the exact board pose, logo-up, and makes the tile permanently unselectable.</summary>

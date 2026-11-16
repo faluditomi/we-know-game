@@ -15,6 +15,7 @@ public class SceneLocalizationTests
     {
         "Menu Canvas/SafeArea/Title Screen/Title Text",
         "Menu Canvas/SafeArea/Title Screen/Status Text",
+        "Menu Canvas/SafeArea/Title Screen/Round Stats Panel/Round Stats",
         "Menu Canvas/SafeArea/Game HUD/Pause Button/Label",
         "Menu Canvas/SafeArea/Settings Screen/Panel/Inactivity Value",
         "Menu Canvas/SafeArea/Picker Screen/Panel/Message",

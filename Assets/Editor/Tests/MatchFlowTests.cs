@@ -50,6 +50,26 @@ public class MatchFlowTests
     }
 
     [Test]
+    public void MismatchesAreCountedAndResetPerBoard()
+    {
+        MatchFlow<FakeTile> flow = NewBoard(2);
+        for(int i = 0; i < 3; i++)
+        {
+            flow.TrySelect(new FakeTile(new object()));
+            Assert.AreEqual(MatchSelectionResult.Mismatch, flow.TrySelect(new FakeTile(new object())));
+            Assert.IsTrue(flow.CompleteMismatch(flow.Generation));
+        }
+
+        object shared = new object();
+        flow.TrySelect(new FakeTile(shared));
+        flow.TrySelect(new FakeTile(shared));
+        Assert.AreEqual(3, flow.Misses, "a match is not a miss");
+
+        flow.StartBoard(2);
+        Assert.AreEqual(0, flow.Misses);
+    }
+
+    [Test]
     public void NullIdentityNeverMatches()
     {
         MatchFlow<FakeTile> flow = NewBoard(1);

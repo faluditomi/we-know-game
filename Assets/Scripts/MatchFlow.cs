@@ -45,6 +45,9 @@ public sealed class MatchFlow<T> where T : class, IMatchTile
     public int PairCount { get; private set; }
     public int ConfirmedPairs { get; private set; }
 
+    /// <summary>Revealed pairs that did not match on the current board.</summary>
+    public int Misses { get; private set; }
+
     /// <summary>
     /// Incremented whenever running sequences become stale (new board, cancellation, failure).
     /// Sequences capture it at start and must check <see cref="IsCurrent"/> before mutating state.
@@ -66,6 +69,7 @@ public sealed class MatchFlow<T> where T : class, IMatchTile
         ClearPair();
         PairCount = pairCount < 0 ? 0 : pairCount;
         ConfirmedPairs = 0;
+        Misses = 0;
         CompletionRaised = false;
         State = PairCount == 0 ? MatchFlowState.Complete : MatchFlowState.AwaitingFirstTile;
     }
@@ -84,6 +88,7 @@ public sealed class MatchFlow<T> where T : class, IMatchTile
         ClearPair();
         PairCount = 0;
         ConfirmedPairs = 0;
+        Misses = 0;
         CompletionRaised = false;
         State = MatchFlowState.Loading;
     }
@@ -104,6 +109,7 @@ public sealed class MatchFlow<T> where T : class, IMatchTile
         Second = tile;
         bool isMatch = First.MatchIdentity != null && ReferenceEquals(First.MatchIdentity, tile.MatchIdentity);
         State = isMatch ? MatchFlowState.PresentingMatch : MatchFlowState.ResolvingMismatch;
+        if(!isMatch) Misses++;
         return isMatch ? MatchSelectionResult.Match : MatchSelectionResult.Mismatch;
     }
 

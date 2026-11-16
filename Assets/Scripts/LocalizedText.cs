@@ -33,13 +33,23 @@ public static class LocalizedText
     public const string TapToContinue = "TapToContinue";
     public const string LoadFailed = "LoadFailed";
     public const string InactivityHint = "InactivityHint";
+    /// <summary>Format: {0} pairs (count of 1).</summary>
+    public const string StatsPairsOne = "StatsPairsOne";
+    /// <summary>Format: {0} pairs.</summary>
+    public const string StatsPairsMany = "StatsPairsMany";
+    /// <summary>Format: {0} misses (count of 1).</summary>
+    public const string StatsMissesOne = "StatsMissesOne";
+    /// <summary>Format: {0} misses.</summary>
+    public const string StatsMissesMany = "StatsMissesMany";
+    public const string StatsSeparator = "StatsSeparator";
 
     /// <summary>Every key, for validation and tests.</summary>
     public static readonly string[] AllKeys =
     {
         Play, Settings, Exit, Back, ChooseBoard, PickerHint, PickerSize, TooSmall, OddCount, TooManyPairs,
         OutOfGrid, Paused, Continue, MainMenu, Vibration, Sound, Music, Inactivity, Language, SecondsValue,
-        TapToContinue, LoadFailed, InactivityHint
+        TapToContinue, LoadFailed, InactivityHint,
+        StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator
     };
 
     private static readonly Dictionary<string, string> English = new Dictionary<string, string>
@@ -67,6 +77,11 @@ public static class LocalizedText
         { TapToContinue, "Tap anywhere to continue" },
         { LoadFailed, "The game could not be loaded." },
         { InactivityHint, "If nobody touches the game for this long, it returns to the title screen." },
+        { StatsPairsOne, "{0} pair" },
+        { StatsPairsMany, "{0} pairs" },
+        { StatsMissesOne, "{0} miss" },
+        { StatsMissesMany, "{0} misses" },
+        { StatsSeparator, " · " },
     };
 
     private static readonly Dictionary<string, string> Hungarian = new Dictionary<string, string>
@@ -94,6 +109,11 @@ public static class LocalizedText
         { TapToContinue, "Koppints bárhová a folytatáshoz" },
         { LoadFailed, "A játékot nem sikerült betölteni." },
         { InactivityHint, "Ha ennyi ideig senki nem érinti meg a játékot, visszatér a kezdőképernyőre." },
+        { StatsPairsOne, "{0} pár" },
+        { StatsPairsMany, "{0} pár" },
+        { StatsMissesOne, "{0} tévesztés" },
+        { StatsMissesMany, "{0} tévesztés" },
+        { StatsSeparator, " · " },
     };
 
 #if UNITY_EDITOR

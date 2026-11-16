@@ -90,6 +90,10 @@ Shader "WeKnow/Hologram Screen"
                 float  _Brightness;
             CBUFFER_END
 
+            // Victory moment surge, 0..1, set globally by GameManager. Kept out of the material
+            // constant buffer so every tile reacts without per-material writes.
+            float _VictorySurge;
+
             Varyings vert (Attributes v)
             {
                 Varyings o = (Varyings)0;
@@ -128,11 +132,11 @@ Shader "WeKnow/Hologram Screen"
                 col += hue * _Sweep2Strength * pow(saturate(1.0 - abs(sweep2 - 0.5) * 8.0), 2.0);
 
                 // Short bright glitch bands that jump to a new height several times a second.
-                float slot = floor(_Time.y * 5.0);
+                float slot = floor(_Time.y * 5.0 * (1.0 + _VictorySurge));
                 float bandY = frac(sin(slot * 12.9898) * 43758.5453);
                 float bandOn = step(0.55, frac(sin(slot * 78.233) * 12543.123));
                 float band = 1.0 - smoothstep(0.0, 0.025, abs(panel.y - bandY));
-                col += hue * _GlitchStrength * band * bandOn;
+                col += hue * (_GlitchStrength + 0.35 * _VictorySurge) * band * bandOn;
 
                 // Inner edge glow, so the panel reads as inset glass.
                 // Masked-off edges are pushed out of reach so they never glow.
@@ -148,7 +152,7 @@ Shader "WeKnow/Hologram Screen"
                 // relative to the scene light (a diffuse term made one face of a spinning
                 // tile visibly darker than the other). _Brightness matches the old lit
                 // value with the panel facing the camera.
-                float3 lit = col * _Brightness;
+                float3 lit = col * _Brightness * (1.0 + 0.6 * _VictorySurge);
 
                 lit += _GlowColor.rgb * lerp(float3(1.0, 1.0, 1.0), hue, _HueStrength);
                 return half4(lit, 1.0);

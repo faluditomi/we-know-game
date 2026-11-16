@@ -54,9 +54,22 @@ public sealed class MenuController : MonoBehaviour
     [SerializeField] private string successTitleLabel = "We Know... And Now You Do Too!";
     [Tooltip("Seconds the success title stays up after a completed game.")]
     [Min(0f)] [SerializeField] private float successTitleDuration = 4f;
-    [Tooltip("Seconds the completed board stays visible before returning to the title.")]
-    [Min(0f)] [SerializeField] private float completionReturnDelay = 1f;
+    [Tooltip("Extra seconds the completed board stays after the victory moment, before returning to the title.")]
+    [Min(0f)] [SerializeField] private float completionReturnDelay = 0f;
     [SerializeField] private TMP_Text statusText;
+    [Tooltip("Round statistics shown under the success title, e.g. \"8 pairs · 1:32 · 3 misses\".")]
+    [SerializeField] private TMP_Text roundStatsText;
+    [Tooltip("Optional backing panel of the statistics line; shown and hidden with it.")]
+    [SerializeField] private GameObject roundStatsPanel;
+    [Tooltip("Image behind the title that pulses as a glow when the success title enters. Uses the title sprite.")]
+    [SerializeField] private UnityEngine.UI.Image titleGlow;
+    [Tooltip("Seconds the success title takes to pop in.")]
+    [Min(0.05f)] [SerializeField] private float titlePopDuration = 0.45f;
+    [Tooltip("Seconds of the glow pulse behind the success title.")]
+    [Min(0.05f)] [SerializeField] private float titleGlowDuration = 0.9f;
+    [Range(0f, 1f)] [SerializeField] private float titleGlowAlpha = 0.95f;
+    [Tooltip("Glow size relative to the title, so it reaches past the opaque artwork.")]
+    [Min(1f)] [SerializeField] private float titleGlowScale = 1.2f;
 
     [Header("Title buttons")]
     [SerializeField] private Button playButton;
@@ -104,6 +117,7 @@ public sealed class MenuController : MonoBehaviour
     private LocalizedLabel[] localizedLabels = Array.Empty<LocalizedLabel>();
     private GameLanguage appliedLanguage;
     private string statusKey;
+    private float titleEntranceElapsed = -1f;
     private Vector2 settingsAnchorMin, settingsAnchorMax, settingsPivot, settingsPosition;
 
     public MenuState State => flow.State;
@@ -200,6 +214,8 @@ public sealed class MenuController : MonoBehaviour
 
         if(inactivity != null && inactivity.Tick(Time.unscaledDeltaTime, flow.IsInGame)) OnInactivityTimeout();
 
+        if(titleEntranceElapsed >= 0f) AnimateTitleEntrance(Time.unscaledDeltaTime);
+
         if(flow.ShowSuccessTitle && !flow.IsInGame)
         {
             successRemaining -= Time.unscaledDeltaTime;
@@ -239,6 +255,13 @@ public sealed class MenuController : MonoBehaviour
 
     private IEnumerator ReturnAfterCompletion()
     {
+        // The victory moment runs on the completed board first; it holds while paused.
+        while(gameManager != null && gameManager.IsVictoryPlaying)
+        {
+            yield return null;
+            if(!flow.IsInGame) yield break;
+        }
+
         float elapsed = 0f;
         while(elapsed < completionReturnDelay)
         {
@@ -254,6 +277,8 @@ public sealed class MenuController : MonoBehaviour
         successRemaining = successTitleDuration;
         if(background != null) background.Celebrate(successTitleDuration);
         Refresh();
+        titleEntranceElapsed = 0f;
+        AnimateTitleEntrance(0f);
     }
 
     // ---- Buttons -----------------------------------------------------------------------------
@@ -462,6 +487,7 @@ public sealed class MenuController : MonoBehaviour
         if(languageDropdown != null) languageDropdown.SetValueWithoutNotify(Array.IndexOf(GameLanguages.All, appliedLanguage));
         RefreshInactivityLabel();
         RefreshStatus();
+        RefreshRoundStats();
     }
 
     // ---- Presentation ------------------------------------------------------------------------
@@ -513,6 +539,73 @@ public sealed class MenuController : MonoBehaviour
             titleText.gameObject.SetActive(sprite == null);
             titleText.text = success ? successTitleLabel : titleLabel;
         }
+
+        if(titleGlow != null)
+        {
+            titleGlow.sprite = sprite;
+            titleGlow.preserveAspect = true;
+            if(!success || sprite == null) SetGlowAlpha(0f);
+        }
+
+        RefreshRoundStats();
+        if(!success) ResetTitleEntrance();
+    }
+
+    /// <summary>Statistics line under the success title; hidden with the normal title or when no board was completed.</summary>
+    private void RefreshRoundStats()
+    {
+        if(roundStatsText == null) return;
+        bool show = flow.ShowSuccessTitle && gameManager != null && gameManager.TryGetLastRoundStats(out _);
+        if(show && gameManager.TryGetLastRoundStats(out RoundStats stats))
+        {
+            roundStatsText.text = RoundStatsText.Format(settings.Language, stats);
+        }
+        roundStatsText.gameObject.SetActive(show);
+        if(roundStatsPanel != null) roundStatsPanel.SetActive(show);
+    }
+
+    private RectTransform VisibleTitle =>
+        titleImage != null && titleImage.gameObject.activeSelf ? titleImage.rectTransform
+        : titleText != null ? titleText.rectTransform : null;
+
+    /// <summary>Pop-in (0.82 → 1.06 → 1.0) and glow pulse of the success title, on unscaled time.</summary>
+    private void AnimateTitleEntrance(float deltaTime)
+    {
+        titleEntranceElapsed += deltaTime;
+        float pop = Mathf.Clamp01(titleEntranceElapsed / titlePopDuration);
+        float scale = pop < 0.6f
+            ? Mathf.Lerp(0.82f, 1.06f, 1f - (1f - pop / 0.6f) * (1f - pop / 0.6f))
+            : Mathf.Lerp(1.06f, 1f, Mathf.SmoothStep(0f, 1f, (pop - 0.6f) / 0.4f));
+
+        RectTransform title = VisibleTitle;
+        if(title != null) title.localScale = Vector3.one * scale;
+
+        float glow = Mathf.Clamp01(titleEntranceElapsed / titleGlowDuration);
+        if(titleGlow != null)
+        {
+            titleGlow.rectTransform.localScale = Vector3.one * scale * titleGlowScale;
+            SetGlowAlpha(titleGlow.sprite != null ? titleGlowAlpha * Mathf.Sin(Mathf.PI * glow) : 0f);
+        }
+
+        if(pop >= 1f && glow >= 1f) ResetTitleEntrance();
+    }
+
+    private void ResetTitleEntrance()
+    {
+        titleEntranceElapsed = -1f;
+        if(titleImage != null) titleImage.rectTransform.localScale = Vector3.one;
+        if(titleText != null) titleText.rectTransform.localScale = Vector3.one;
+        if(titleGlow != null) titleGlow.rectTransform.localScale = Vector3.one * titleGlowScale;
+        SetGlowAlpha(0f);
+    }
+
+    private void SetGlowAlpha(float alpha)
+    {
+        if(titleGlow == null) return;
+        Color colour = style.accentColor;
+        colour.a = alpha;
+        titleGlow.color = colour;
+        titleGlow.enabled = alpha > 0.001f;
     }
 
     /// <summary>Shows the <see cref="LocalizedText"/> entry <paramref name="key"/> as the status line, or hides it when null.</summary>
