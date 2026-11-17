@@ -15,8 +15,20 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 7b41c0f8292a70d4ba06edc1afc58d51
   m_SerializeEntries:
-  - m_GUID: 125b0d1bb29a1774eb3ace2222070cdc
-    m_Address: scriptable_objects/strawberry
+  - m_GUID: 07674f3b6c6c492bb3d4ce24ebcb7b74
+    m_Address: scriptable_objects/palm_strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - tile
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 488721c248124e35b43e3e0fb0caca36
+    m_Address: scriptable_objects/veteran_friendly
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - tile
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e956e609865c4038976025bae2580a0e
+    m_Address: scriptable_objects/delivery
     m_ReadOnly: 0
     m_SerializedLabels:
     - tile
@@ -33,20 +45,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - tile
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8419c19ab5a072f448a395b9e203b554
-    m_Address: scriptable_objects/apple
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - tile
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aa9e1a646d1b4950a807bf40bc2f0c53
     m_Address: scriptable_objects/sap
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - tile
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b23eac2e89c318e49a0ec66e70e69873
-    m_Address: scriptable_objects/cherry
     m_ReadOnly: 0
     m_SerializedLabels:
     - tile

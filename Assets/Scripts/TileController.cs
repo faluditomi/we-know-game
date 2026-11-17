@@ -129,7 +129,15 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     {
         if(language == displayLanguage) return;
         language = displayLanguage;
-        if(tile != null && descriptionText != null) descriptionText.text = tile.GetDescription(language);
+        if(tile == null) return;
+        if(descriptionText != null) descriptionText.text = tile.GetDescription(language);
+
+        Sprite logo = tile.GetLogo(language);
+        if(logoRenderer != null && logo != null)
+        {
+            ApplyLogo(logo);
+            logoRenderer.SetPropertyBlock(logoBlock);
+        }
     }
 
     /// <summary>Shows <paramref name="tileData"/>; its description is shown in <paramref name="displayLanguage"/>.</summary>
@@ -148,9 +156,10 @@ public sealed class TileController : MonoBehaviour, IMatchTile
         bodyBaseColor = ReadBaseColor(bodyRenderer, Color.white);
         logoBaseColor = ReadBaseColor(logoRenderer, Color.white);
 
-        if(logoRenderer != null && tileData.backLogo != null)
+        Sprite logo = tileData.GetLogo(language);
+        if(logoRenderer != null && logo != null)
         {
-            ApplyLogo(tileData.backLogo);
+            ApplyLogo(logo);
         }
 
         ApplyScreenHue(tileData.tileColour);
@@ -381,7 +390,7 @@ public sealed class TileController : MonoBehaviour, IMatchTile
     private void SetPairLogo(bool visible, bool leftHalf)
     {
         if(pairLogoRenderer == null) return;
-        Sprite logo = tile != null ? tile.backLogo : null;
+        Sprite logo = tile != null ? tile.GetLogo(language) : null;
         bool show = visible && logo != null;
         pairLogoRenderer.enabled = show;
         if(!show) return;

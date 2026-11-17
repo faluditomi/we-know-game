@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36c9567f9e2779c40922efc550b2922a, type: 3}
+  m_Name: veteran_friendly_tile
+  m_EditorClassIdentifier: Assembly-CSharp::Tile
+  tileName: Veteran-Friendly
+  foundDescription: "<b>Veteran-Friendly Company</b>\nWe-Know is a veteran-friendly employer: former soldiers are welcome on the team, with support as they build their civilian careers."
+  foundDescriptionHungarian: "<b>Veteránbarát Vállalat</b>\nA We-Know veteránbarát munkáltató: szívesen fogad egykori katonákat, és támogatja őket civil pályájukon."
+  backLogo: {fileID: 21300000, guid: fd3a907013884f1093d010e771242e2d, type: 3}
+  backLogoHungarian: {fileID: 21300000, guid: d7c9ee0a99144b6ebd1a9d04cd3c6958, type: 3}
+  tileColour: {r: 0.42352942, g: 0.5137255, b: 0.16078432, a: 1}

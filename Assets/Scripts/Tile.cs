@@ -9,6 +9,8 @@ public class Tile : ScriptableObject
     [Tooltip("Hungarian description. Leave empty to show the English one.")]
     public string foundDescriptionHungarian;
     public Sprite backLogo;
+    [Tooltip("Hungarian version of the logo, for logos with text in them. Leave empty to show the main logo.")]
+    public Sprite backLogoHungarian;
     public Color tileColour;
 
     /// <summary>The description in <paramref name="language"/>, or the English one when that language has none.</summary>
@@ -16,5 +18,11 @@ public class Tile : ScriptableObject
     {
         string localized = language == GameLanguage.Hungarian ? foundDescriptionHungarian : null;
         return string.IsNullOrWhiteSpace(localized) ? foundDescription : localized;
+    }
+
+    /// <summary>The logo for <paramref name="language"/>, or <see cref="backLogo"/> when that language has none.</summary>
+    public Sprite GetLogo(GameLanguage language)
+    {
+        return language == GameLanguage.Hungarian && backLogoHungarian != null ? backLogoHungarian : backLogo;
     }
 }
