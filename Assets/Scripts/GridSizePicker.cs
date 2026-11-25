@@ -42,6 +42,15 @@ public sealed class GridSizePicker : MonoBehaviour, IPointerDownHandler, IDragHa
 
     public int Size => size;
 
+    /// <summary>Sprite of the grid cells, for drawing small board icons in the same style.</summary>
+    public Sprite CellSprite => cellSprite;
+
+    /// <summary>
+    /// Replaces the message line, e.g. to confirm or refuse a size in the preset editor.
+    /// The next press shows the live selection readout again.
+    /// </summary>
+    public void ShowMessage(string text, bool isError) => SetMessage(text, isError);
+
     private void Awake()
     {
         rectTransform = (RectTransform)transform;

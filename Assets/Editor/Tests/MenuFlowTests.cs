@@ -185,4 +185,37 @@ public class MenuFlowTests
         Assert.IsFalse(flow.Complete());
         Assert.AreEqual(MenuState.Title, flow.State);
     }
+
+    [Test]
+    public void PresetEditorOpensFromTitleSettingsAndReturnsThere()
+    {
+        MenuFlow flow = ReadyFlow();
+        Assert.IsFalse(flow.OpenPresetEditor(), "not from the title itself");
+        flow.OpenSettings();
+        Assert.IsTrue(flow.CanEditPresets);
+        Assert.IsTrue(flow.OpenPresetEditor());
+        Assert.AreEqual(MenuState.PresetEditor, flow.State);
+        Assert.IsFalse(flow.IsInGame, "the inactivity timeout does not apply in the editor");
+        Assert.IsFalse(flow.CloseSettings());
+        Assert.IsFalse(flow.OpenPicker());
+
+        Assert.IsTrue(flow.ClosePresetEditor());
+        Assert.AreEqual(MenuState.Settings, flow.State);
+        Assert.IsTrue(flow.CloseSettings());
+        Assert.AreEqual(MenuState.Title, flow.State, "settings still return to the title");
+    }
+
+    [Test]
+    public void PresetEditorIsUnavailableDuringAGame()
+    {
+        MenuFlow flow = ReadyFlow();
+        flow.OpenPicker();
+        flow.StartGame();
+        flow.Pause();
+        flow.OpenSettings();
+        Assert.IsFalse(flow.CanEditPresets);
+        Assert.IsFalse(flow.OpenPresetEditor());
+        Assert.AreEqual(MenuState.Settings, flow.State);
+        Assert.IsFalse(flow.ClosePresetEditor());
+    }
 }

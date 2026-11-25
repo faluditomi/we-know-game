@@ -93,6 +93,35 @@ public sealed class MenuController : MonoBehaviour
     [SerializeField] private TMP_Dropdown languageDropdown;
     [SerializeField] private Button settingsBackButton;
 
+    [Header("Board sizes")]
+    [Tooltip("Free choice / Preset sizes. Its options are filled in code in the current language.")]
+    [SerializeField] private TMP_Dropdown boardSizeDropdown;
+    [Tooltip("Opens the preset editor. Only works on the settings screen opened from the title.")]
+    [SerializeField] private Button editSizesButton;
+    [Tooltip("Small note shown while preset mode has no usable sizes.")]
+    [SerializeField] private GameObject boardSizeNote;
+    [Tooltip("Picker heading: CHOOSE YOUR BOARD, or EDIT BOARD SIZES in the editor.")]
+    [SerializeField] private TMP_Text pickerHeading;
+    [Tooltip("The picker's message line; hidden with the grid when the preset buttons are shown.")]
+    [SerializeField] private GameObject pickerMessage;
+    [Tooltip("Area for the preset buttons, which replace the grid in preset mode.")]
+    [SerializeField] private RectTransform presetButtonsPanel;
+    [Tooltip("Inactive button cloned for each preset; its first TMP label shows the size.")]
+    [SerializeField] private Button presetButtonTemplate;
+    [Min(1f)] [SerializeField] private Vector2 presetButtonSize = new Vector2(330f, 96f);
+    [SerializeField] private Vector2 presetButtonSpacing = new Vector2(20f, 16f);
+    [Tooltip("Preset list beside the grid in the editor.")]
+    [SerializeField] private RectTransform presetListPanel;
+    [Tooltip("Inactive row cloned for each preset: a \"Label\" text child and a remove button. Its position is the first row's.")]
+    [SerializeField] private RectTransform presetRowTemplate;
+    [Min(1f)] [SerializeField] private float presetRowHeight = 88f;
+    [Tooltip("Shown in the preset list while it is empty.")]
+    [SerializeField] private GameObject presetListEmpty;
+    [Tooltip("The picker's main panel (heading, grid, back). Scaled down with the preset list to fit short screens.")]
+    [SerializeField] private RectTransform pickerPanel;
+    [Tooltip("Space kept between a panel that had to be scaled down to fit and the safe area's edges.")]
+    [Min(0f)] [SerializeField] private float panelFitMargin = 24f;
+
     [Header("Inactivity")]
     [Tooltip("Mouse or pen movement smaller than this (pixels) is ignored, so jitter cannot keep an abandoned game alive.")]
     [Min(0f)] [SerializeField] private float pointerMoveThreshold = 4f;
@@ -128,6 +157,11 @@ public sealed class MenuController : MonoBehaviour
     private string statusKey;
     private float titleEntranceElapsed = -1f;
     private Vector2 settingsAnchorMin, settingsAnchorMax, settingsPivot, settingsPosition;
+    private Vector2 pickerPanelPosition, presetListPosition;
+    private readonly System.Collections.Generic.List<GameObject> presetButtons = new System.Collections.Generic.List<GameObject>();
+    private readonly System.Collections.Generic.List<GameObject> presetRows = new System.Collections.Generic.List<GameObject>();
+
+    private int DesignCount => gameManager != null ? gameManager.DesignCount : 0;
 
     public MenuState State => flow.State;
     public GameSettings Settings => settings;
@@ -160,6 +194,9 @@ public sealed class MenuController : MonoBehaviour
         Bind(continueButton, OnContinue);
         Bind(pauseSettingsButton, OnOpenSettings);
         Bind(mainMenuButton, OnMainMenu);
+        Bind(editSizesButton, OnEditSizes);
+        if(presetButtonTemplate != null) presetButtonTemplate.gameObject.SetActive(false);
+        if(presetRowTemplate != null) presetRowTemplate.gameObject.SetActive(false);
 
         if(picker != null)
         {
@@ -175,6 +212,10 @@ public sealed class MenuController : MonoBehaviour
             settingsPivot = settingsPanel.pivot;
             settingsPosition = settingsPanel.anchoredPosition;
         }
+        // The grid's parent is the picker panel; use it when the field isn't wired.
+        if(pickerPanel == null && picker != null) pickerPanel = picker.transform.parent as RectTransform;
+        if(pickerPanel != null) pickerPanelPosition = pickerPanel.anchoredPosition;
+        if(presetListPanel != null) presetListPosition = presetListPanel.anchoredPosition;
 
 #if UNITY_IOS && !UNITY_EDITOR
         if(exitButton != null) exitButton.gameObject.SetActive(false);
@@ -306,6 +347,18 @@ public sealed class MenuController : MonoBehaviour
     private void OnPlay()
     {
         if(!flow.OpenPicker()) return;
+
+        // Preset mode with a single usable size: there is nothing to choose, so start that board straight away.
+        if(settings.UsesBoardPresets(DesignCount))
+        {
+            System.Collections.Generic.List<BoardSize> usable = settings.UsableBoardPresets(DesignCount);
+            if(usable.Count == 1)
+            {
+                StartBoard(usable[0].Columns, usable[0].Rows);
+                if(flow.State == MenuState.Playing) return;
+            }
+        }
+
         PlaySound(SoundCue.ButtonClick);
         Refresh();
     }
@@ -324,14 +377,33 @@ public sealed class MenuController : MonoBehaviour
         Refresh();
     }
 
+    /// <summary>The picker's BACK: to the title, or from the preset editor back to settings.</summary>
     private void OnPickerBack()
     {
-        if(!flow.ClosePicker()) return;
+        bool moved = flow.State == MenuState.PresetEditor ? flow.ClosePresetEditor() : flow.ClosePicker();
+        if(!moved) return;
         PlaySound(SoundCue.ButtonBack);
         Refresh();
     }
 
+    private void OnEditSizes()
+    {
+        if(!flow.OpenPresetEditor()) return;
+        PlaySound(SoundCue.ButtonClick);
+        Refresh();
+    }
+
     private void OnBoardSelected(int columns, int rows)
+    {
+        if(flow.State == MenuState.PresetEditor)
+        {
+            AddPreset(new BoardSize(columns, rows));
+            return;
+        }
+        StartBoard(columns, rows);
+    }
+
+    private void StartBoard(int columns, int rows)
     {
         if(flow.State != MenuState.Picker || gameManager == null) return;
         if(!gameManager.StartGame(columns, rows)) return;
@@ -434,6 +506,7 @@ public sealed class MenuController : MonoBehaviour
             case MenuState.Playing: OnPause(); break;
             case MenuState.Paused: OnContinue(); break;
             case MenuState.Picker: OnPickerBack(); break;
+            case MenuState.PresetEditor: OnPickerBack(); break;
             case MenuState.Settings: OnSettingsBack(); break;
         }
     }
@@ -516,6 +589,207 @@ public sealed class MenuController : MonoBehaviour
                 PlaySound(SoundCue.DropdownSelect);
             });
         }
+
+        if(boardSizeDropdown != null)
+        {
+            FillBoardSizeOptions();
+            boardSizeDropdown.onValueChanged.AddListener(index =>
+            {
+                settings.BoardSizeMode = index == (int)BoardSizeMode.Presets ? BoardSizeMode.Presets : BoardSizeMode.FreeChoice;
+                PlaySound(SoundCue.DropdownSelect);
+            });
+        }
+    }
+
+    /// <summary>Free choice / Preset sizes in the current language, showing the current mode.</summary>
+    private void FillBoardSizeOptions()
+    {
+        if(boardSizeDropdown == null) return;
+        boardSizeDropdown.ClearOptions();
+        boardSizeDropdown.AddOptions(new System.Collections.Generic.List<string>
+        {
+            LocalizedText.Get(settings.Language, LocalizedText.FreeChoice),
+            LocalizedText.Get(settings.Language, LocalizedText.PresetSizes)
+        });
+        boardSizeDropdown.SetValueWithoutNotify((int)settings.BoardSizeMode);
+        boardSizeDropdown.RefreshShownValue();
+    }
+
+    /// <summary>Note while preset mode has no usable sizes; EDIT SIZES only from the title's settings.</summary>
+    private void RefreshBoardSizeControls()
+    {
+        if(boardSizeDropdown != null && boardSizeDropdown.value != (int)settings.BoardSizeMode)
+            boardSizeDropdown.SetValueWithoutNotify((int)settings.BoardSizeMode);
+        if(editSizesButton != null) editSizesButton.interactable = flow.CanEditPresets;
+        SetActive(boardSizeNote, settings.BoardSizeMode == BoardSizeMode.Presets && !settings.UsesBoardPresets(DesignCount));
+    }
+
+    // ---- Board size presets ------------------------------------------------------------------
+
+    private void AddPreset(BoardSize size)
+    {
+        PresetAddResult result = settings.AddBoardPreset(size, DesignCount);
+        string message;
+        switch(result)
+        {
+            case PresetAddResult.Added:
+                message = LocalizedText.Format(settings.Language, LocalizedText.PresetAdded, size.Columns, size.Rows);
+                PlaySound(SoundCue.ButtonClick);
+                break;
+            case PresetAddResult.Duplicate:
+                message = LocalizedText.Get(settings.Language, LocalizedText.PresetDuplicate);
+                break;
+            case PresetAddResult.Full:
+                message = LocalizedText.Get(settings.Language, LocalizedText.PresetListFull);
+                break;
+            default:
+                message = LocalizedText.Get(settings.Language, BoardSelection.Describe(BoardSelection.Validate(size.Columns, size.Rows, DesignCount)));
+                break;
+        }
+
+        if(picker != null) picker.ShowMessage(message, result != PresetAddResult.Added);
+        RebuildPresetList();
+    }
+
+    private void RemovePreset(BoardSize size)
+    {
+        if(!settings.RemoveBoardPreset(size)) return;
+        PlaySound(SoundCue.ButtonBack);
+        RebuildPresetList();
+    }
+
+    private string PresetLabel(BoardSize size) =>
+        LocalizedText.Format(settings.Language, LocalizedText.PresetSize, size.Columns, size.Rows, size.Pairs);
+
+    /// <summary>One button per usable preset, two per row, the last one centred when the count is odd.</summary>
+    private void RebuildPresetButtons()
+    {
+        ClearClones(presetButtons);
+        if(presetButtonsPanel == null || presetButtonTemplate == null) return;
+
+        System.Collections.Generic.List<BoardSize> sizes = settings.UsableBoardPresets(DesignCount);
+        float rowWidth = presetButtonSize.x * 2f + presetButtonSpacing.x;
+        float left = (presetButtonsPanel.rect.width - rowWidth) * 0.5f;
+
+        for(int i = 0; i < sizes.Count; i++)
+        {
+            BoardSize size = sizes[i];
+            Button button = Instantiate(presetButtonTemplate, presetButtonsPanel);
+            button.name = $"Preset {size}";
+            button.gameObject.SetActive(true);
+            presetButtons.Add(button.gameObject);
+
+            int column = i % 2, row = i / 2;
+            bool alone = column == 0 && i == sizes.Count - 1;
+            float x = alone ? (presetButtonsPanel.rect.width - presetButtonSize.x) * 0.5f : left + column * (presetButtonSize.x + presetButtonSpacing.x);
+            RectTransform rect = (RectTransform)button.transform;
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+            rect.sizeDelta = presetButtonSize;
+            rect.anchoredPosition = new Vector2(x, -row * (presetButtonSize.y + presetButtonSpacing.y));
+
+            TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
+            if(label != null)
+            {
+                MakeCompact(label);
+                label.text = PresetLabel(size);
+                label.rectTransform.offsetMin = new Vector2(presetButtonSize.y, label.rectTransform.offsetMin.y);
+            }
+            AddBoardIcon(rect, size, presetButtonSize.y * 0.62f);
+            button.onClick.AddListener(() => StartBoard(size.Columns, size.Rows));
+        }
+    }
+
+    /// <summary>The editor's list: every preset with a remove button; unusable ones dimmed and marked.</summary>
+    private void RebuildPresetList()
+    {
+        ClearClones(presetRows);
+        if(presetListPanel == null || presetRowTemplate == null) return;
+
+        System.Collections.Generic.IReadOnlyList<BoardSize> sizes = settings.BoardPresets;
+        SetActive(presetListEmpty, sizes.Count == 0);
+        Vector2 first = presetRowTemplate.anchoredPosition;
+
+        for(int i = 0; i < sizes.Count; i++)
+        {
+            BoardSize size = sizes[i];
+            RectTransform row = Instantiate(presetRowTemplate, presetListPanel);
+            row.name = $"Preset {size}";
+            row.gameObject.SetActive(true);
+            row.anchoredPosition = first - new Vector2(0f, i * presetRowHeight);
+            presetRows.Add(row.gameObject);
+
+            bool usable = BoardPresets.IsUsable(size, DesignCount);
+            Transform labelTransform = row.Find("Label");
+            if(labelTransform != null && labelTransform.TryGetComponent(out TMP_Text label))
+            {
+                MakeCompact(label);
+                label.text = usable ? PresetLabel(size) : $"{PresetLabel(size)}  ({LocalizedText.Get(settings.Language, LocalizedText.PresetUnavailable)})";
+                AddBoardIcon((RectTransform)labelTransform, size, Mathf.Min(48f, row.rect.height * 0.8f), true);
+            }
+            if(!usable) row.gameObject.AddComponent<CanvasGroup>().alpha = 0.45f;
+
+            Button remove = row.GetComponentInChildren<Button>(true);
+            if(remove != null) remove.onClick.AddListener(() => RemovePreset(size));
+        }
+    }
+
+    /// <summary>
+    /// Draws a small grid of the board's shape at the left of <paramref name="parent"/>, in the picker's cell style.
+    /// With <paramref name="outside"/>, it sits just left of the parent instead of inside it.
+    /// </summary>
+    private void AddBoardIcon(RectTransform parent, BoardSize size, float box, bool outside = false)
+    {
+        var icon = new GameObject("Icon", typeof(RectTransform));
+        icon.layer = parent.gameObject.layer;
+        RectTransform iconRect = (RectTransform)icon.transform;
+        iconRect.SetParent(parent, false);
+        iconRect.anchorMin = iconRect.anchorMax = new Vector2(0f, 0.5f);
+        iconRect.pivot = new Vector2(outside ? 1f : 0f, 0.5f);
+        iconRect.sizeDelta = new Vector2(box, box);
+        iconRect.anchoredPosition = new Vector2(outside ? -box * 0.25f : box * 0.3f, 0f);
+
+        Sprite sprite = picker != null ? picker.CellSprite : null;
+        float step = box / Mathf.Max(size.Columns, size.Rows);
+        float cell = step * 0.82f;
+        Vector2 origin = new Vector2((box - step * size.Columns) * 0.5f, -(box - step * size.Rows) * 0.5f);
+        for(int y = 0; y < size.Rows; y++)
+        {
+            for(int x = 0; x < size.Columns; x++)
+            {
+                var cellObject = new GameObject("Cell", typeof(RectTransform));
+                cellObject.layer = icon.layer;
+                RectTransform cellRect = (RectTransform)cellObject.transform;
+                cellRect.SetParent(iconRect, false);
+                cellRect.anchorMin = cellRect.anchorMax = cellRect.pivot = new Vector2(0f, 1f);
+                cellRect.sizeDelta = new Vector2(cell, cell);
+                cellRect.anchoredPosition = origin + new Vector2(x * step, -y * step);
+                Image image = cellObject.AddComponent<Image>();
+                image.sprite = sprite;
+                image.type = sprite != null && sprite.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
+                image.color = new Color(1f, 1f, 1f, 0.9f);
+                image.raycastTarget = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Size labels sit beside an icon in a narrow button, so they drop the menu's wide letter spacing
+    /// and shrink to fit on one line.
+    /// </summary>
+    private static void MakeCompact(TMP_Text label)
+    {
+        label.characterSpacing = -2f;
+        label.wordSpacing = -10f;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.enableAutoSizing = true;
+        label.fontSizeMin = 14f;
+        label.fontSizeMax = Mathf.Max(label.fontSizeMax, 26f);
+    }
+
+    private static void ClearClones(System.Collections.Generic.List<GameObject> clones)
+    {
+        foreach(GameObject clone in clones) if(clone != null) Destroy(clone);
+        clones.Clear();
     }
 
     private void RefreshInactivityLabel()
@@ -534,6 +808,7 @@ public sealed class MenuController : MonoBehaviour
             appliedBatterySaver = settings.BatterySaver;
             FrameRate.Apply(appliedBatterySaver);
         }
+        RefreshBoardSizeControls();
     }
 
     /// <summary>Shows every localized label, the picker messages and code-driven texts in the current language. The title stays English.</summary>
@@ -547,6 +822,8 @@ public sealed class MenuController : MonoBehaviour
 
         if(picker != null) picker.SetLanguage(appliedLanguage);
         if(languageDropdown != null) languageDropdown.SetValueWithoutNotify(Array.IndexOf(GameLanguages.All, appliedLanguage));
+        FillBoardSizeOptions();
+        RefreshPickerHeading();
         RefreshInactivityLabel();
         RefreshStatus();
         RefreshRoundStats();
@@ -561,16 +838,52 @@ public sealed class MenuController : MonoBehaviour
 
         SetActive(menuOverlay, inMenu);
         SetActive(titleScreen, state == MenuState.Title || state == MenuState.Loading);
-        SetActive(pickerScreen, state == MenuState.Picker);
+        SetActive(pickerScreen, state == MenuState.Picker || state == MenuState.PresetEditor);
         SetActive(settingsScreen, state == MenuState.Settings);
-        if(state == MenuState.Settings) PlaceSettingsPanel(flow.IsInGame);
+        if(state == MenuState.Settings)
+        {
+            PlaceSettingsPanel(flow.IsInGame);
+            RefreshBoardSizeControls();
+        }
         SetActive(pauseScreen, state == MenuState.Paused);
         SetActive(gameHud, state == MenuState.Playing);
+        RefreshPickerPanels(state);
 
         if(playButton != null) playButton.interactable = flow.GameAvailable;
-        if(picker != null && state == MenuState.Picker) picker.ResetSelection();
         if(background != null) background.SetVisible(inMenu);
         RefreshTitle();
+    }
+
+    /// <summary>
+    /// Picker screen content: the grid (free choice), the preset buttons (preset mode with usable sizes),
+    /// or the grid with the preset list (editor).
+    /// </summary>
+    private void RefreshPickerPanels(MenuState state)
+    {
+        bool editing = state == MenuState.PresetEditor;
+        bool picking = state == MenuState.Picker;
+        bool presetButtonsShown = picking && settings.UsesBoardPresets(DesignCount);
+        bool gridShown = editing || (picking && !presetButtonsShown);
+
+        if(picker != null) SetActive(picker.gameObject, gridShown || !(picking || editing));
+        SetActive(pickerMessage, gridShown || !(picking || editing));
+        if(presetButtonsPanel != null) SetActive(presetButtonsPanel.gameObject, presetButtonsShown);
+        if(presetListPanel != null) SetActive(presetListPanel.gameObject, editing);
+        if(picking || editing) FitPickerPanels();
+
+        if(gridShown && picker != null) picker.ResetSelection();
+        if(presetButtonsShown) RebuildPresetButtons();
+        else ClearClones(presetButtons);
+        if(editing) RebuildPresetList();
+        else ClearClones(presetRows);
+        RefreshPickerHeading();
+    }
+
+    private void RefreshPickerHeading()
+    {
+        if(pickerHeading == null) return;
+        string key = flow.State == MenuState.PresetEditor ? LocalizedText.EditBoardSizes : LocalizedText.ChooseBoard;
+        pickerHeading.text = LocalizedText.Get(settings.Language, key);
     }
 
     /// <summary>Centres the settings panel over a paused game; otherwise restores its scene position beside the title.</summary>
@@ -582,6 +895,53 @@ public sealed class MenuController : MonoBehaviour
         settingsPanel.anchorMax = centred ? centre : settingsAnchorMax;
         settingsPanel.pivot = centred ? centre : settingsPivot;
         settingsPanel.anchoredPosition = centred ? Vector2.zero : settingsPosition;
+        FitPanel(settingsPanel, settingsPosition, centred, out _);
+    }
+
+    /// <summary>Scales the picker panel, and the preset list beside it, down together when they don't fit.</summary>
+    private void FitPickerPanels()
+    {
+        if(pickerPanel == null) return;
+        FitPanel(pickerPanel, pickerPanelPosition, false, out float scale);
+        if(presetListPanel == null) return;
+
+        presetListPanel.localScale = Vector3.one * scale;
+        presetListPanel.anchoredPosition = new Vector2(
+            pickerPanelPosition.x + (presetListPosition.x - pickerPanelPosition.x) * scale,
+            pickerPanel.anchoredPosition.y);
+    }
+
+    /// <summary>
+    /// Shrinks a fixed-size panel that would reach past its screen's safe area (short or very wide screens make
+    /// the canvas shorter than the 1080 reference), and moves it up so it sits <see cref="panelFitMargin"/> from the top.
+    /// A panel that fits keeps its scene position and size. <paramref name="home"/> is its scene position.
+    /// </summary>
+    private void FitPanel(RectTransform panel, Vector2 home, bool centred, out float scale)
+    {
+        scale = 1f;
+        if(panel == null || !(panel.parent is RectTransform area)) return;
+
+        Vector2 available = area.rect.size;
+        Vector2 size = panel.rect.size;
+        if(size.x <= 0f || size.y <= 0f || available.y <= 0f) return;
+
+        float margin = panelFitMargin;
+        float fitHeight = centred ? available.y - 2f * margin : available.y - Mathf.Max(margin, -home.y) - margin;
+        float fitWidth = centred ? available.x - 2f * margin : available.x - home.x - margin;
+        scale = Mathf.Clamp(Mathf.Min(fitHeight / size.y, fitWidth / size.x), 0.5f, 1f);
+
+        if(!centred && scale < 1f)
+        {
+            // Not even moving it up to the margin would let it fit at full size: use the space from the margin down.
+            float fromMargin = Mathf.Min((available.y - 2f * margin) / size.y, fitWidth / size.x);
+            scale = Mathf.Clamp(fromMargin, 0.5f, 1f);
+            panel.anchoredPosition = new Vector2(home.x, -margin);
+        }
+        else if(!centred)
+        {
+            panel.anchoredPosition = home;
+        }
+        panel.localScale = Vector3.one * scale;
     }
 
     private void RefreshTitle()
@@ -734,6 +1094,10 @@ public sealed class MenuController : MonoBehaviour
         safeAreaRoot.anchorMax = new Vector2(safe.xMax / size.x, safe.yMax / size.y);
         safeAreaRoot.offsetMin = Vector2.zero;
         safeAreaRoot.offsetMax = Vector2.zero;
+
+        // The usable height changed: fit the fixed-size panels again.
+        if(flow.State == MenuState.Settings) PlaceSettingsPanel(flow.IsInGame);
+        FitPickerPanels();
     }
 
     private void PlaySound(SoundCue cue)

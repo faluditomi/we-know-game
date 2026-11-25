@@ -45,6 +45,22 @@ public static class LocalizedText
     public const string StatsSeparator = "StatsSeparator";
     /// <summary>Music and sound credits on the Settings screen, required by the assets' licences.</summary>
     public const string Credits = "Credits";
+    public const string BoardSizes = "BoardSizes";
+    public const string FreeChoice = "FreeChoice";
+    public const string PresetSizes = "PresetSizes";
+    public const string EditSizes = "EditSizes";
+    public const string NoPresetsNote = "NoPresetsNote";
+    public const string EditBoardSizes = "EditBoardSizes";
+    public const string PresetListHeading = "PresetListHeading";
+    public const string PresetListEmpty = "PresetListEmpty";
+    /// <summary>Format: {0} columns, {1} rows.</summary>
+    public const string PresetAdded = "PresetAdded";
+    public const string PresetDuplicate = "PresetDuplicate";
+    public const string PresetListFull = "PresetListFull";
+    public const string PresetUnavailable = "PresetUnavailable";
+    public const string PresetRemove = "PresetRemove";
+    /// <summary>Compact size on preset buttons and list rows. Format: {0} columns, {1} rows, {2} pairs.</summary>
+    public const string PresetSize = "PresetSize";
 
     /// <summary>Every key, for validation and tests.</summary>
     public static readonly string[] AllKeys =
@@ -52,7 +68,9 @@ public static class LocalizedText
         Play, Settings, Exit, Back, ChooseBoard, PickerHint, PickerSize, TooSmall, OddCount, TooManyPairs,
         OutOfGrid, Paused, Continue, MainMenu, Vibration, BatterySaver, Sound, Music, Inactivity, Language, SecondsValue,
         TapToContinue, LoadFailed, InactivityHint,
-        StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator, Credits
+        StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator, Credits,
+        BoardSizes, FreeChoice, PresetSizes, EditSizes, NoPresetsNote, EditBoardSizes, PresetListHeading, PresetListEmpty,
+        PresetAdded, PresetDuplicate, PresetListFull, PresetUnavailable, PresetRemove, PresetSize
     };
 
     private static readonly Dictionary<string, string> English = new Dictionary<string, string>
@@ -87,6 +105,20 @@ public static class LocalizedText
         { StatsMissesMany, "{0} misses" },
         { StatsSeparator, " · " },
         { Credits, "Music: \"Saturday Morning\" by Purrple Cat (purrplecat.com), unmodified\nLicensed under CC BY-SA 3.0 · creativecommons.org/licenses/by-sa/3.0\nSound effects: JDSherbert (Ultimate UI SFX Pack) · Kenney (kenney.nl)" },
+        { BoardSizes, "BOARD SIZES" },
+        { FreeChoice, "Free choice" },
+        { PresetSizes, "Preset sizes" },
+        { EditSizes, "EDIT SIZES" },
+        { NoPresetsNote, "No sizes added yet, so players choose freely." },
+        { EditBoardSizes, "EDIT BOARD SIZES" },
+        { PresetListHeading, "SIZES" },
+        { PresetListEmpty, "Drag on the grid to add a size" },
+        { PresetAdded, "Added {0} × {1}" },
+        { PresetDuplicate, "That size is already in the list" },
+        { PresetListFull, "The list is full: remove a size first" },
+        { PresetUnavailable, "not available" },
+        { PresetRemove, "REMOVE" },
+        { PresetSize, "{0} × {1} · {2} pairs" },
     };
 
     private static readonly Dictionary<string, string> Hungarian = new Dictionary<string, string>
@@ -121,6 +153,20 @@ public static class LocalizedText
         { StatsMissesMany, "{0} tévesztés" },
         { StatsSeparator, " · " },
         { Credits, "Zene: \"Saturday Morning\", Purrple Cat (purrplecat.com), változtatás nélkül\nLicenc: CC BY-SA 3.0 · creativecommons.org/licenses/by-sa/3.0\nHangeffektek: JDSherbert (Ultimate UI SFX Pack) · Kenney (kenney.nl)" },
+        { BoardSizes, "TÁBLAMÉRET" },
+        { FreeChoice, "Szabad választás" },
+        { PresetSizes, "Megadott méretek" },
+        { EditSizes, "SZERKESZTÉS" },
+        { NoPresetsNote, "Még nincs megadott méret, így a játékosok szabadon választanak." },
+        { EditBoardSizes, "TÁBLAMÉRETEK SZERKESZTÉSE" },
+        { PresetListHeading, "MÉRETEK" },
+        { PresetListEmpty, "Húzd végig az ujjad a rácson egy méret hozzáadásához" },
+        { PresetAdded, "Hozzáadva: {0} × {1}" },
+        { PresetDuplicate, "Ez a méret már szerepel a listában" },
+        { PresetListFull, "A lista megtelt: előbb törölj egy méretet" },
+        { PresetUnavailable, "nem elérhető" },
+        { PresetRemove, "TÖRLÉS" },
+        { PresetSize, "{0} × {1} · {2} pár" },
     };
 
 #if UNITY_EDITOR

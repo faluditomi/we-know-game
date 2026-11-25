@@ -6,7 +6,9 @@ public enum MenuState
     Settings,
     Picker,
     Playing,
-    Paused
+    Paused,
+    /// <summary>The grid picker editing the preset board sizes; reached from settings opened on the title.</summary>
+    PresetEditor
 }
 
 /// <summary>
@@ -48,6 +50,20 @@ public sealed class MenuFlow
     }
 
     public bool CloseSettings() => Move(MenuState.Settings, settingsReturn);
+
+    /// <summary>True on the settings screen opened from the title, where the preset editor can be opened.</summary>
+    public bool CanEditPresets => State == MenuState.Settings && settingsReturn == MenuState.Title;
+
+    /// <summary>Opens the preset editor from settings opened on the title; never during a game.</summary>
+    public bool OpenPresetEditor()
+    {
+        if(!CanEditPresets) return false;
+        State = MenuState.PresetEditor;
+        return true;
+    }
+
+    /// <summary>Back to the settings screen, which still returns to the title.</summary>
+    public bool ClosePresetEditor() => Move(MenuState.PresetEditor, MenuState.Settings);
 
     public bool OpenPicker()
     {
