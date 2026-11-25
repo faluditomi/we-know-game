@@ -33,9 +33,9 @@
 
 ## 6. Validation (Unity Editor / device)
 
-- [ ] 6.1 Run all edit-mode tests in the Test Runner
-- [ ] 6.2 In play mode, check the wider Settings layout at 16:9 and 20:9: rows aligned, sliders easy to drag, note and credits visible, and the pause-menu Settings centred and not clipped
-- [ ] 6.3 Free choice: PLAY still opens the grid and behaves as before
-- [ ] 6.4 Preset mode: switch to presets with an empty list (note shown, PLAY opens the grid), add sizes in the editor (sorted, duplicates and the full list rejected, remove works), then PLAY shows the buttons in order and a tap starts the right board; with a single preset, PLAY starts it directly
-- [ ] 6.5 Restart the game: the mode and presets persist. Open Settings from the pause menu: EDIT SIZES is disabled, and a mode change applies to the next board
-- [ ] 6.6 Check the Hungarian text on all new UI and on a phone
+- [x] 6.1 Run all edit-mode tests in the Test Runner
+- [x] 6.2 In play mode, check the wider Settings layout at 16:9 and 20:9: rows aligned, sliders easy to drag, note and credits visible, and the pause-menu Settings centred and not clipped
+- [x] 6.3 Free choice: PLAY still opens the grid and behaves as before
+- [x] 6.4 Preset mode: switch to presets with an empty list (note shown, PLAY opens the grid), add sizes in the editor (sorted, duplicates and the full list rejected, remove works), then PLAY shows the buttons in order and a tap starts the right board; with a single preset, PLAY starts it directly
+- [x] 6.5 Restart the game: the mode and presets persist. Open Settings from the pause menu: EDIT SIZES is disabled, and a mode change applies to the next board
+- [x] 6.6 Check the Hungarian text on all new UI and on a phone
