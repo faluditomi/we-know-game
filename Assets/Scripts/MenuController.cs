@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -158,8 +159,8 @@ public sealed class MenuController : MonoBehaviour
     private float titleEntranceElapsed = -1f;
     private Vector2 settingsAnchorMin, settingsAnchorMax, settingsPivot, settingsPosition;
     private Vector2 pickerPanelPosition, presetListPosition;
-    private readonly System.Collections.Generic.List<GameObject> presetButtons = new System.Collections.Generic.List<GameObject>();
-    private readonly System.Collections.Generic.List<GameObject> presetRows = new System.Collections.Generic.List<GameObject>();
+    private readonly List<GameObject> presetButtons = new List<GameObject>();
+    private readonly List<GameObject> presetRows = new List<GameObject>();
 
     private int DesignCount => gameManager != null ? gameManager.DesignCount : 0;
 
@@ -349,9 +350,9 @@ public sealed class MenuController : MonoBehaviour
         if(!flow.OpenPicker()) return;
 
         // Preset mode with a single usable size: there is nothing to choose, so start that board straight away.
-        if(settings.UsesBoardPresets(DesignCount))
+        if(settings.BoardSizeMode == BoardSizeMode.Presets)
         {
-            System.Collections.Generic.List<BoardSize> usable = settings.UsableBoardPresets(DesignCount);
+            List<BoardSize> usable = settings.UsableBoardPresets(DesignCount);
             if(usable.Count == 1)
             {
                 StartBoard(usable[0].Columns, usable[0].Rows);
@@ -579,7 +580,7 @@ public sealed class MenuController : MonoBehaviour
         if(languageDropdown != null)
         {
             languageDropdown.ClearOptions();
-            var options = new System.Collections.Generic.List<string>();
+            var options = new List<string>();
             foreach(GameLanguage language in GameLanguages.All) options.Add(GameLanguages.NativeName(language));
             languageDropdown.AddOptions(options);
             languageDropdown.SetValueWithoutNotify(Array.IndexOf(GameLanguages.All, settings.Language));
@@ -606,7 +607,7 @@ public sealed class MenuController : MonoBehaviour
     {
         if(boardSizeDropdown == null) return;
         boardSizeDropdown.ClearOptions();
-        boardSizeDropdown.AddOptions(new System.Collections.Generic.List<string>
+        boardSizeDropdown.AddOptions(new List<string>
         {
             LocalizedText.Get(settings.Language, LocalizedText.FreeChoice),
             LocalizedText.Get(settings.Language, LocalizedText.PresetSizes)
@@ -662,12 +663,11 @@ public sealed class MenuController : MonoBehaviour
         LocalizedText.Format(settings.Language, LocalizedText.PresetSize, size.Columns, size.Rows, size.Pairs);
 
     /// <summary>One button per usable preset, two per row, the last one centred when the count is odd.</summary>
-    private void RebuildPresetButtons()
+    private void RebuildPresetButtons(List<BoardSize> sizes)
     {
         ClearClones(presetButtons);
         if(presetButtonsPanel == null || presetButtonTemplate == null) return;
 
-        System.Collections.Generic.List<BoardSize> sizes = settings.UsableBoardPresets(DesignCount);
         float rowWidth = presetButtonSize.x * 2f + presetButtonSpacing.x;
         float left = (presetButtonsPanel.rect.width - rowWidth) * 0.5f;
 
@@ -690,7 +690,6 @@ public sealed class MenuController : MonoBehaviour
             TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
             if(label != null)
             {
-                MakeCompact(label);
                 label.text = PresetLabel(size);
                 label.rectTransform.offsetMin = new Vector2(presetButtonSize.y, label.rectTransform.offsetMin.y);
             }
@@ -705,7 +704,7 @@ public sealed class MenuController : MonoBehaviour
         ClearClones(presetRows);
         if(presetListPanel == null || presetRowTemplate == null) return;
 
-        System.Collections.Generic.IReadOnlyList<BoardSize> sizes = settings.BoardPresets;
+        IReadOnlyList<BoardSize> sizes = settings.BoardPresets;
         SetActive(presetListEmpty, sizes.Count == 0);
         Vector2 first = presetRowTemplate.anchoredPosition;
 
@@ -722,7 +721,6 @@ public sealed class MenuController : MonoBehaviour
             Transform labelTransform = row.Find("Label");
             if(labelTransform != null && labelTransform.TryGetComponent(out TMP_Text label))
             {
-                MakeCompact(label);
                 label.text = usable ? PresetLabel(size) : $"{PresetLabel(size)}  ({LocalizedText.Get(settings.Language, LocalizedText.PresetUnavailable)})";
                 AddBoardIcon((RectTransform)labelTransform, size, Mathf.Min(48f, row.rect.height * 0.8f), true);
             }
@@ -772,21 +770,7 @@ public sealed class MenuController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Size labels sit beside an icon in a narrow button, so they drop the menu's wide letter spacing
-    /// and shrink to fit on one line.
-    /// </summary>
-    private static void MakeCompact(TMP_Text label)
-    {
-        label.characterSpacing = -2f;
-        label.wordSpacing = -10f;
-        label.textWrappingMode = TextWrappingModes.NoWrap;
-        label.enableAutoSizing = true;
-        label.fontSizeMin = 14f;
-        label.fontSizeMax = Mathf.Max(label.fontSizeMax, 26f);
-    }
-
-    private static void ClearClones(System.Collections.Generic.List<GameObject> clones)
+    private static void ClearClones(List<GameObject> clones)
     {
         foreach(GameObject clone in clones) if(clone != null) Destroy(clone);
         clones.Clear();
@@ -862,7 +846,8 @@ public sealed class MenuController : MonoBehaviour
     {
         bool editing = state == MenuState.PresetEditor;
         bool picking = state == MenuState.Picker;
-        bool presetButtonsShown = picking && settings.UsesBoardPresets(DesignCount);
+        List<BoardSize> usable = picking && settings.BoardSizeMode == BoardSizeMode.Presets ? settings.UsableBoardPresets(DesignCount) : null;
+        bool presetButtonsShown = usable != null && usable.Count > 0;
         bool gridShown = editing || (picking && !presetButtonsShown);
 
         if(picker != null) SetActive(picker.gameObject, gridShown || !(picking || editing));
@@ -872,7 +857,7 @@ public sealed class MenuController : MonoBehaviour
         if(picking || editing) FitPickerPanels();
 
         if(gridShown && picker != null) picker.ResetSelection();
-        if(presetButtonsShown) RebuildPresetButtons();
+        if(presetButtonsShown) RebuildPresetButtons(usable);
         else ClearClones(presetButtons);
         if(editing) RebuildPresetList();
         else ClearClones(presetRows);

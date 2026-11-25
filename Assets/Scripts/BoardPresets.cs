@@ -89,6 +89,16 @@ public sealed class BoardPresets
         return usable;
     }
 
+    /// <summary>True when at least one size is a valid board for <paramref name="designCount"/> tile designs. Doesn't allocate.</summary>
+    public bool HasUsable(int designCount)
+    {
+        foreach(BoardSize size in sizes)
+        {
+            if(IsUsable(size, designCount)) return true;
+        }
+        return false;
+    }
+
     public static bool IsUsable(BoardSize size, int designCount)
     {
         return BoardSelection.Validate(size.Columns, size.Rows, designCount) == BoardSelectionResult.Valid;

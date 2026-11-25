@@ -102,7 +102,7 @@ public sealed class GameSettings
     public List<BoardSize> UsableBoardPresets(int designCount) => boardPresets.Usable(designCount);
 
     /// <summary>True when PLAY should show the preset choice: preset mode with at least one usable size.</summary>
-    public bool UsesBoardPresets(int designCount) => boardSizeMode == BoardSizeMode.Presets && boardPresets.Usable(designCount).Count > 0;
+    public bool UsesBoardPresets(int designCount) => boardSizeMode == BoardSizeMode.Presets && boardPresets.HasUsable(designCount);
 
     /// <summary>Adds a preset size and saves the list when it was added.</summary>
     public PresetAddResult AddBoardPreset(BoardSize size, int designCount)

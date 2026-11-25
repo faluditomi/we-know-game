@@ -3,22 +3,11 @@ using NUnit.Framework;
 
 public class GameSettingsTests
 {
-    private sealed class MemoryStorage : ISettingsStorage
-    {
-        public readonly Dictionary<string, float> Values = new Dictionary<string, float>();
-        public int Saves;
-        public bool HasKey(string key) => Values.ContainsKey(key);
-        public int GetInt(string key, int fallback) => Values.TryGetValue(key, out float v) ? (int)v : fallback;
-        public float GetFloat(string key, float fallback) => Values.TryGetValue(key, out float v) ? v : fallback;
-        public void SetInt(string key, int value) => Values[key] = value;
-        public void SetFloat(string key, float value) => Values[key] = value;
-        public void Save() => Saves++;
-    }
 
     [Test]
     public void FreshInstallUsesDefaults()
     {
-        GameSettings settings = new GameSettings(new MemoryStorage(), defaultVibration: false, defaultSoundVolume: 0.5f, defaultMusicVolume: 0.25f);
+        GameSettings settings = new GameSettings(new MemorySettingsStorage(), defaultVibration: false, defaultSoundVolume: 0.5f, defaultMusicVolume: 0.25f);
         Assert.IsFalse(settings.Vibration);
         Assert.AreEqual(0.5f, settings.SoundVolume);
         Assert.AreEqual(0.25f, settings.MusicVolume);
@@ -27,7 +16,7 @@ public class GameSettingsTests
     [Test]
     public void ValuesRoundTripThroughStorage()
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         GameSettings first = new GameSettings(storage);
         first.Vibration = false;
         first.SoundVolume = 0.3f;
@@ -43,7 +32,7 @@ public class GameSettingsTests
     [Test]
     public void BatterySaverIsOffByDefaultAndRoundTrips()
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         GameSettings first = new GameSettings(storage);
         Assert.IsFalse(first.BatterySaver);
 
@@ -69,7 +58,7 @@ public class GameSettingsTests
     [Test]
     public void VolumesAreClamped()
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         storage.Values[GameSettings.SoundVolumeKey] = 4f;
         GameSettings settings = new GameSettings(storage);
         Assert.AreEqual(1f, settings.SoundVolume);
@@ -83,7 +72,7 @@ public class GameSettingsTests
     [Test]
     public void InactivityTimeoutDefaultsTo60Seconds()
     {
-        Assert.AreEqual(60, new GameSettings(new MemoryStorage()).InactivityTimeoutSeconds);
+        Assert.AreEqual(60, new GameSettings(new MemorySettingsStorage()).InactivityTimeoutSeconds);
     }
 
     [TestCase(5, 15)]
@@ -94,7 +83,7 @@ public class GameSettingsTests
     [TestCase(1000, 300)]
     public void InactivityTimeoutIsClampedAndSnappedToFiveSeconds(int requested, int expected)
     {
-        GameSettings settings = new GameSettings(new MemoryStorage());
+        GameSettings settings = new GameSettings(new MemorySettingsStorage());
         settings.InactivityTimeoutSeconds = requested;
         Assert.AreEqual(expected, settings.InactivityTimeoutSeconds);
     }
@@ -102,7 +91,7 @@ public class GameSettingsTests
     [Test]
     public void InactivityTimeoutRoundTripsAndSanitisesStoredValues()
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         new GameSettings(storage).InactivityTimeoutSeconds = 90;
         Assert.AreEqual(90, new GameSettings(storage).InactivityTimeoutSeconds);
 
@@ -113,13 +102,13 @@ public class GameSettingsTests
     [Test]
     public void LanguageDefaultsToEnglish()
     {
-        Assert.AreEqual(GameLanguage.English, new GameSettings(new MemoryStorage()).Language);
+        Assert.AreEqual(GameLanguage.English, new GameSettings(new MemorySettingsStorage()).Language);
     }
 
     [Test]
     public void LanguageRoundTripsThroughStorage()
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         new GameSettings(storage).Language = GameLanguage.Hungarian;
         Assert.AreEqual(GameLanguage.Hungarian, new GameSettings(storage).Language);
         Assert.AreEqual(1, storage.Saves);
@@ -130,7 +119,7 @@ public class GameSettingsTests
     [TestCase(99)]
     public void UnknownStoredLanguageReadsAsEnglish(int stored)
     {
-        MemoryStorage storage = new MemoryStorage();
+        MemorySettingsStorage storage = new MemorySettingsStorage();
         storage.Values[GameSettings.LanguageKey] = stored;
         Assert.AreEqual(GameLanguage.English, new GameSettings(storage).Language);
     }
@@ -138,7 +127,7 @@ public class GameSettingsTests
     [Test]
     public void SettingAnUnknownLanguageStoresEnglish()
     {
-        GameSettings settings = new GameSettings(new MemoryStorage());
+        GameSettings settings = new GameSettings(new MemorySettingsStorage());
         settings.Language = GameLanguage.Hungarian;
         settings.Language = (GameLanguage)42;
         Assert.AreEqual(GameLanguage.English, settings.Language);
@@ -147,7 +136,7 @@ public class GameSettingsTests
     [Test]
     public void LanguageRaisesTheEventOnlyWhenItChanges()
     {
-        GameSettings settings = new GameSettings(new MemoryStorage());
+        GameSettings settings = new GameSettings(new MemorySettingsStorage());
         int raised = 0;
         settings.Changed += () => raised++;
         settings.Language = GameLanguage.English;   // unchanged default
@@ -159,7 +148,7 @@ public class GameSettingsTests
     [Test]
     public void ChangesRaiseTheEventOnlyWhenValuesChange()
     {
-        GameSettings settings = new GameSettings(new MemoryStorage());
+        GameSettings settings = new GameSettings(new MemorySettingsStorage());
         int raised = 0;
         settings.Changed += () => raised++;
         settings.Vibration = true;   // unchanged default

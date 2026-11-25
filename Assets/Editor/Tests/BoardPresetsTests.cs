@@ -3,16 +3,6 @@ using NUnit.Framework;
 
 public class BoardPresetsTests
 {
-    private sealed class MemoryStorage : ISettingsStorage
-    {
-        public readonly Dictionary<string, float> Values = new Dictionary<string, float>();
-        public bool HasKey(string key) => Values.ContainsKey(key);
-        public int GetInt(string key, int fallback) => Values.TryGetValue(key, out float v) ? (int)v : fallback;
-        public float GetFloat(string key, float fallback) => Values.TryGetValue(key, out float v) ? v : fallback;
-        public void SetInt(string key, int value) => Values[key] = value;
-        public void SetFloat(string key, float value) => Values[key] = value;
-        public void Save() { }
-    }
 
     private const int Designs = 8; // largest valid board: 4 × 4
 
@@ -75,7 +65,7 @@ public class BoardPresetsTests
     [Test]
     public void FreshInstallUsesFreeChoiceAndNoPresets()
     {
-        var settings = new GameSettings(new MemoryStorage());
+        var settings = new GameSettings(new MemorySettingsStorage());
         Assert.AreEqual(BoardSizeMode.FreeChoice, settings.BoardSizeMode);
         CollectionAssert.IsEmpty(settings.BoardPresets);
         Assert.IsFalse(settings.UsesBoardPresets(Designs));
@@ -84,7 +74,7 @@ public class BoardPresetsTests
     [Test]
     public void PresetModeNeedsAUsablePreset()
     {
-        var settings = new GameSettings(new MemoryStorage());
+        var settings = new GameSettings(new MemorySettingsStorage());
         settings.BoardSizeMode = BoardSizeMode.Presets;
         Assert.IsFalse(settings.UsesBoardPresets(Designs), "an empty list falls back to free choice");
 
@@ -96,7 +86,7 @@ public class BoardPresetsTests
     [Test]
     public void ModeAndPresetsRoundTripThroughStorage()
     {
-        var storage = new MemoryStorage();
+        var storage = new MemorySettingsStorage();
         var first = new GameSettings(storage);
         int changes = 0;
         first.Changed += () => changes++;
@@ -116,7 +106,7 @@ public class BoardPresetsTests
     [Test]
     public void MalformedStoredPresetsAreDropped()
     {
-        var storage = new MemoryStorage();
+        var storage = new MemorySettingsStorage();
         storage.SetInt(GameSettings.BoardSizeModeKey, 7);
         storage.SetInt(GameSettings.BoardPresetCountKey, 6);
         storage.SetInt(GameSettings.BoardPresetKeyPrefix + 0, 304);  // 3 × 4

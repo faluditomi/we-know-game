@@ -19,6 +19,9 @@ public class SceneLocalizationTests
         "Menu Canvas/SafeArea/Game HUD/Pause Button/Label",
         "Menu Canvas/SafeArea/Settings Screen/Panel/Inactivity Value",
         "Menu Canvas/SafeArea/Picker Screen/Panel/Message",
+        // Preset sizes, written from code into each copy of these templates.
+        "Menu Canvas/SafeArea/Picker Screen/Panel/Preset Buttons/Preset Button Template/Label",
+        "Menu Canvas/SafeArea/Picker Screen/Preset List Panel/Preset Row Template/Label",
     };
 
     [Test]
