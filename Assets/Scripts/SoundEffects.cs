@@ -88,22 +88,29 @@ public sealed class SoundEffects : MonoBehaviour
     public void Play(SoundCue soundCue)
     {
         Cue cue = CueFor(soundCue);
-        if(cue == null || cue.clip == null) return;
+        if(cue == null) return;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // The audition overlay follows every cue the game plays, including silent ones.
+        if(Played != null && !IsThrottled(soundCue)) Played(soundCue);
+        AudioClip clip = EffectiveClip(soundCue);
+#else
+        AudioClip clip = cue.clip;
+#endif
+        if(clip == null) return;
 
         float volume = cue.volume * MasterVolume;
         if(volume <= 0.0001f) return;
 
-        int index = (int)soundCue;
-        float now = Time.unscaledTime;
-        if(lastPlayed[index] >= 0f && now - lastPlayed[index] < minRepeatInterval) return;
-        lastPlayed[index] = now;
+        if(IsThrottled(soundCue)) return;
+        lastPlayed[(int)soundCue] = Time.unscaledTime;
 
         EnsureSources();
         AudioSource source = sources[nextSource];
         nextSource = (nextSource + 1) % sources.Length;
 
         source.Stop();
-        source.clip = cue.clip;
+        source.clip = clip;
         source.volume = volume;
         source.pitch = 1f + (cue.pitchVariation > 0f ? UnityEngine.Random.Range(-cue.pitchVariation, cue.pitchVariation) : 0f);
         source.Play();
@@ -114,6 +121,62 @@ public sealed class SoundEffects : MonoBehaviour
     {
         foreach(AudioSource source in sources) if(source != null) source.Stop();
     }
+
+    private bool IsThrottled(SoundCue soundCue)
+    {
+        EnsureSources();
+        float last = lastPlayed[(int)soundCue];
+        return last >= 0f && Time.unscaledTime - last < minRepeatInterval;
+    }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    // ---- Sound audition (Editor and development builds only) --------------------------------
+
+    private bool[] auditionOverridden;
+    private AudioClip[] auditionClips;
+
+    /// <summary>Raised when the game asks for a cue and it isn't throttled, even if the cue is silent.</summary>
+    public event Action<SoundCue> Played;
+
+    /// <summary>The clip the cue ships with, ignoring any audition override.</summary>
+    public AudioClip ShippingClip(SoundCue soundCue)
+    {
+        return CueFor(soundCue)?.clip;
+    }
+
+    /// <summary>The clip the cue plays right now: its audition override if it has one, otherwise its shipping clip.</summary>
+    public AudioClip EffectiveClip(SoundCue soundCue)
+    {
+        int index = (int)soundCue;
+        if(auditionOverridden != null && auditionOverridden[index]) return auditionClips[index];
+        return ShippingClip(soundCue);
+    }
+
+    /// <summary>Plays <paramref name="clip"/> for the cue instead of its shipping clip; null makes the cue silent.</summary>
+    public void SetAuditionClip(SoundCue soundCue, AudioClip clip)
+    {
+        if(auditionOverridden == null)
+        {
+            int count = Enum.GetValues(typeof(SoundCue)).Length;
+            auditionOverridden = new bool[count];
+            auditionClips = new AudioClip[count];
+        }
+        auditionOverridden[(int)soundCue] = true;
+        auditionClips[(int)soundCue] = clip;
+    }
+
+    public bool HasAuditionClip(SoundCue soundCue)
+    {
+        return auditionOverridden != null && auditionOverridden[(int)soundCue];
+    }
+
+    /// <summary>Every cue goes back to its shipping clip.</summary>
+    public void ClearAuditionClips()
+    {
+        auditionOverridden = null;
+        auditionClips = null;
+    }
+#endif
 
     private void EnsureSources()
     {
