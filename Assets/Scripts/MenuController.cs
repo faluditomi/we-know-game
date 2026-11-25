@@ -107,6 +107,8 @@ public sealed class MenuController : MonoBehaviour
     [Header("Sound")]
     [Tooltip("Sound effects for buttons, toggles, sliders and the picker. Falls back to the first one in the scene; without one the menus are silent.")]
     [SerializeField] private SoundEffects soundEffects;
+    [Tooltip("Background music, scaled by the Music volume setting. Falls back to the first one in the scene.")]
+    [SerializeField] private MusicPlayer music;
 
     [Header("Style")]
     [SerializeField] private MenuStyle style = new MenuStyle();
@@ -138,6 +140,8 @@ public sealed class MenuController : MonoBehaviour
         if(gameManager != null) gameManager.UseSettings(settings);
         if(soundEffects == null) soundEffects = FindFirstObjectByType<SoundEffects>();
         if(soundEffects != null) soundEffects.UseSettings(settings);
+        if(music == null) music = FindFirstObjectByType<MusicPlayer>();
+        if(music != null) music.UseSettings(settings);
         inactivity = new InactivityTimer(settings.InactivityTimeoutSeconds);
         settings.Changed += () => inactivity.TimeoutSeconds = settings.InactivityTimeoutSeconds;
         settings.Changed += OnSettingsChanged;

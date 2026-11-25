@@ -43,6 +43,8 @@ public static class LocalizedText
     /// <summary>Format: {0} misses.</summary>
     public const string StatsMissesMany = "StatsMissesMany";
     public const string StatsSeparator = "StatsSeparator";
+    /// <summary>Music and sound credits on the Settings screen, required by the assets' licences.</summary>
+    public const string Credits = "Credits";
 
     /// <summary>Every key, for validation and tests.</summary>
     public static readonly string[] AllKeys =
@@ -50,7 +52,7 @@ public static class LocalizedText
         Play, Settings, Exit, Back, ChooseBoard, PickerHint, PickerSize, TooSmall, OddCount, TooManyPairs,
         OutOfGrid, Paused, Continue, MainMenu, Vibration, BatterySaver, Sound, Music, Inactivity, Language, SecondsValue,
         TapToContinue, LoadFailed, InactivityHint,
-        StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator
+        StatsPairsOne, StatsPairsMany, StatsMissesOne, StatsMissesMany, StatsSeparator, Credits
     };
 
     private static readonly Dictionary<string, string> English = new Dictionary<string, string>
@@ -84,6 +86,7 @@ public static class LocalizedText
         { StatsMissesOne, "{0} miss" },
         { StatsMissesMany, "{0} misses" },
         { StatsSeparator, " · " },
+        { Credits, "Music: \"Saturday Morning\" by Purrple Cat (purrplecat.com), unmodified\nLicensed under CC BY-SA 3.0 · creativecommons.org/licenses/by-sa/3.0\nSound effects: JDSherbert (Ultimate UI SFX Pack) · Kenney (kenney.nl)" },
     };
 
     private static readonly Dictionary<string, string> Hungarian = new Dictionary<string, string>
@@ -117,6 +120,7 @@ public static class LocalizedText
         { StatsMissesOne, "{0} tévesztés" },
         { StatsMissesMany, "{0} tévesztés" },
         { StatsSeparator, " · " },
+        { Credits, "Zene: \"Saturday Morning\", Purrple Cat (purrplecat.com), változtatás nélkül\nLicenc: CC BY-SA 3.0 · creativecommons.org/licenses/by-sa/3.0\nHangeffektek: JDSherbert (Ultimate UI SFX Pack) · Kenney (kenney.nl)" },
     };
 
 #if UNITY_EDITOR
